@@ -1,8 +1,8 @@
 {
   "resolution": 7,
   "model_status": "live",
-  "model_note": "Forecast from the trained AST-GCN model over the diurnal cycle (anchor + next-3 steps).",
-  "anchor_date": "2025-02-28",
+  "model_note": "Modeled climatology from the trained AST-GCN forecast: the typical air for today's date (season + weekday/weekend) by time of day, refreshed daily - not a live measurement.",
+  "anchor_date": "2026-06-17",
   "slot_hours": [
     0,
     4,
@@ -71,7 +71,7 @@
   ],
   "no_data_color": "#BFBFBF",
   "disclaimers": [
-    "Research demonstrator for Jakarta air quality over the full diurnal cycle: each forecast anchors at a fixed clock slot and shows the current value plus the next 3 steps.",
+    "The shown values are a TIME-ONLY climatology - the typical diurnal pattern for today's calendar date (its season and whether it is a weekday or weekend), distilled from the trained AST-GCN model and refreshed daily. It is NOT a live measurement or a forecast of today's specific weather.",
     "Forecasts are per H3 hex cell on the mainland-DKI grid, in selectable 2/3/4-hour steps (default 4 h: now, +4h, +8h, +12h).",
     "The within-day shape is CAMS-derived and ISPU-calibrated at the daily peak; there is no hourly ground truth, so the sub-daily curve cannot be independently validated.",
     "Ground truth is only 5 DKI monitoring stations, so OFF-station (per-cell) accuracy is NOT independently validatable - per-cell differences are an informed display gradient, not a measured value. A real deployment must state this."

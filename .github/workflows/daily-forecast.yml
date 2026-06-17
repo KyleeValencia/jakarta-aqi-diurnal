@@ -1,0 +1,45 @@
+name: Daily forecast refresh
+
+# Free cloud "backend": each day this picks today's curve from the committed time-only
+# climatology and republishes the static forecast JSON. No model run, no live data feed,
+# no paid server -- GitHub Pages then serves the updated files. (D-12 deployment.)
+
+on:
+  schedule:
+    - cron: "10 17 * * *"      # 00:10 WIB (UTC+7) every day
+  workflow_dispatch: {}         # allow a manual run from the Actions tab
+
+permissions:
+  contents: write               # so the job can commit the refreshed JSON
+
+concurrency:
+  group: daily-forecast
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install --quiet pyarrow
+
+      - name: Build today's forecast from the climatology
+        run: python update_forecast.py
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/forecast_r7.json data/meta.json
+          if git diff --cached --quiet; then
+            echo "No change today - nothing to publish."
+          else
+            git commit -m "Daily forecast refresh ($(date -u +%Y-%m-%d))"
+            git push
+          fi

@@ -87,8 +87,10 @@ CATEGORY_ENGLISH = {
 }
 
 DISCLAIMERS = [
-    "Research demonstrator for Jakarta air quality over the full diurnal cycle: each forecast "
-    "anchors at a fixed clock slot and shows the current value plus the next 3 steps.",
+    "The shown values are a TIME-ONLY climatology - the typical diurnal pattern for today's "
+    "calendar date (its season and whether it is a weekday or weekend), distilled from the trained "
+    "AST-GCN model and refreshed daily. It is NOT a live measurement or a forecast of today's "
+    "specific weather.",
     "Forecasts are per H3 hex cell on the mainland-DKI grid, in selectable 2/3/4-hour steps "
     "(default 4 h: now, +4h, +8h, +12h).",
     "The within-day shape is CAMS-derived and ISPU-calibrated at the daily peak; there is no "
@@ -103,7 +105,8 @@ PENDING_NOTE = (
     "published - the map and location tools work, but per-cell values show "
     "'awaiting model output'."
 )
-LIVE_NOTE = "Forecast from the trained AST-GCN model over the diurnal cycle (anchor + next-3 steps)."
+LIVE_NOTE = ("Modeled climatology from the trained AST-GCN forecast: the typical air for today's date "
+             "(season + weekday/weekend) by time of day, refreshed daily - not a live measurement.")
 
 
 # -----------------------------------------------------------------------------
