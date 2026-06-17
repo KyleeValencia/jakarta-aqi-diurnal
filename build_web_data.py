@@ -60,6 +60,7 @@ from aqi_models.physics import (  # noqa: E402
     ISPU_CATEGORY_COLOR,
     ISPU_INDEX_CATEGORY,
 )
+from aqi_models.config import ModelConfig  # noqa: E402
 
 # -----------------------------------------------------------------------------
 # Config
@@ -67,8 +68,13 @@ from aqi_models.physics import (  # noqa: E402
 OUT_DIR = PROJECT_ROOT / "web" / "data"
 COORD_NDIGITS = 5  # ~1 m; trims the GeoJSON payload without visible loss
 
-# Horizons the model forecasts: anchor, +3h, +6h (the locked 3-step morning window).
-HORIZONS_H = [0, 3, 6]
+# Default horizons advertised when no live forecast is loaded (pending mode). In live
+# mode these are replaced by NB8's actual forecast horizons (meta.horizons_h). Derived
+# from ModelConfig so it tracks the diurnal default (D-12: anchor + next-3 -> [0,4,8,12]).
+DEFAULT_HORIZONS_H = ModelConfig().forecast_offsets()
+# Default clock slots (pending mode); live mode uses NB8's meta.slot_hours. Every fixed
+# slot spaced forecast_n h apart (D-12 default 4 -> [0,4,8,12,16,20]).
+DEFAULT_SLOT_HOURS = ModelConfig().anchor_hours
 
 # English glosses for the Indonesian category labels (display only).
 CATEGORY_ENGLISH = {
@@ -81,9 +87,12 @@ CATEGORY_ENGLISH = {
 }
 
 DISCLAIMERS = [
-    "Research demonstrator for Jakarta MORNING air quality (pre-dawn anchor + commute hours); "
-    "the afternoon peak is out of scope by design.",
-    "Forecasts are per H3 hex cell on the mainland-DKI grid, in 3-hour steps (now, +3h, +6h).",
+    "Research demonstrator for Jakarta air quality over the full diurnal cycle: each forecast "
+    "anchors at a fixed clock slot and shows the current value plus the next 3 steps.",
+    "Forecasts are per H3 hex cell on the mainland-DKI grid, in selectable 2/3/4-hour steps "
+    "(default 4 h: now, +4h, +8h, +12h).",
+    "The within-day shape is CAMS-derived and ISPU-calibrated at the daily peak; there is no "
+    "hourly ground truth, so the sub-daily curve cannot be independently validated.",
     "Ground truth is only 5 DKI monitoring stations, so OFF-station (per-cell) accuracy is NOT "
     "independently validatable - per-cell differences are an informed display gradient, not a "
     "measured value. A real deployment must state this.",
@@ -94,7 +103,7 @@ PENDING_NOTE = (
     "published - the map and location tools work, but per-cell values show "
     "'awaiting model output'."
 )
-LIVE_NOTE = "Forecast from the trained ST-GCN model (morning window, 3-hour steps)."
+LIVE_NOTE = "Forecast from the trained AST-GCN model over the diurnal cycle (anchor + next-3 steps)."
 
 
 # -----------------------------------------------------------------------------
@@ -154,26 +163,36 @@ def write_geojson(gdf, res: int) -> int:
     return len(geojson["features"])
 
 
-def load_nb8_forecast(res: int, grid_ids: set) -> tuple[dict, str | None]:
-    """Read NB8's canonical web_data/forecast_r{res}.json and keep only the cells
-    that exist on the current grid (drops stale-grid cells). NB8 emits the flat
-    shape { h3_id: [ {offset_h, value, category, colour} ] } which is exactly the
-    per-cell series the frontend wants."""
+def load_nb8_forecast(res: int, grid_ids: set) -> tuple[dict, str | None, list | None, list | None]:
+    """Read NB8's canonical web_data/forecast_r{res}.json and keep only the cells that
+    exist on the current grid (drops stale-grid cells). NB8 emits the slot-keyed shape
+    { h3_id: { slot_h: [ {offset_h, value, category, colour} ] } } — the per-(cell, slot)
+    diurnal series the page clock-slices. Also returns NB8's actual anchor_date / horizons
+    / slot_hours (from meta) so the web layer advertises what was really served, not a guess."""
     nb8 = Path(paths.WORKING_ROOT) / "web_data" / f"forecast_r{res}.json"
     if not nb8.exists():
         raise FileNotFoundError(
             f"--mode live needs NB8 output at {nb8} (run NB8 inference + mirror it)."
         )
     raw = json.loads(nb8.read_text(encoding="utf-8"))
-    anchor = None
+    anchor = horizons = slot_hours = None
     nb8_meta = Path(paths.WORKING_ROOT) / "web_data" / "meta.json"
     if nb8_meta.exists():
-        anchor = json.loads(nb8_meta.read_text(encoding="utf-8")).get("anchor_ts")
-    cells = {hid: series for hid, series in raw.items() if hid in grid_ids}
+        _m = json.loads(nb8_meta.read_text(encoding="utf-8"))
+        anchor = _m.get("anchor_date") or _m.get("anchor_ts")
+        horizons = _m.get("horizons_h")
+        slot_hours = _m.get("slot_hours")
+    cells = {hid: slots for hid, slots in raw.items() if hid in grid_ids}
     dropped = len(raw) - len(cells)
     if dropped:
         print(f"[build] live: kept {len(cells)} cells, dropped {dropped} not on the r{res} grid")
-    return cells, anchor
+    if cells:                                   # fallbacks straight from the served data
+        any_slots = next(iter(cells.values()))  # { slot_h: [series] }
+        if slot_hours is None:
+            slot_hours = sorted(int(s) for s in any_slots)
+        if horizons is None:
+            horizons = [p["offset_h"] for p in next(iter(any_slots.values()))]
+    return cells, anchor, horizons, slot_hours
 
 
 # -----------------------------------------------------------------------------
@@ -204,20 +223,24 @@ def main() -> None:
     grid_ids = set(gdf["h3_id"])
 
     if args.mode == "live":
-        cells, anchor = load_nb8_forecast(res, grid_ids)
+        cells, anchor, horizons, slot_hours = load_nb8_forecast(res, grid_ids)
+        horizons = horizons or DEFAULT_HORIZONS_H
+        slot_hours = slot_hours or DEFAULT_SLOT_HOURS
         model_status = "live"
         model_note = LIVE_NOTE
     else:
         cells, anchor = {}, None
+        horizons, slot_hours = DEFAULT_HORIZONS_H, DEFAULT_SLOT_HOURS
         model_status = "pending_retrain"
         model_note = PENDING_NOTE
 
-    # --- Per-cell forecast (frontend contract) ---
+    # --- Per-cell forecast (frontend contract: slot-keyed diurnal series) ---
     forecast = {
         "model_status": model_status,
-        "anchor_ts": anchor,
+        "anchor_date": anchor,
         "resolution": res,
-        "horizons_h": HORIZONS_H,
+        "slot_hours": slot_hours,
+        "horizons_h": horizons,
         "cells": cells,
     }
     fpath = OUT_DIR / f"forecast_r{res}.json"
@@ -229,9 +252,11 @@ def main() -> None:
         "resolution": res,
         "model_status": model_status,
         "model_note": model_note,
-        "anchor_ts": anchor,
-        "horizons_h": HORIZONS_H,
-        "has_plus_9h": False,
+        "anchor_date": anchor,
+        "slot_hours": slot_hours,
+        "horizons_h": horizons,
+        "n_horizons": len(horizons),
+        "n_slots": len(slot_hours),
         "n_cells": n_geo,
         "n_forecast_cells": len(cells),
         "legend": build_legend(),

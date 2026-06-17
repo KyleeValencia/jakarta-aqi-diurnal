@@ -1,9 +1,11 @@
 /* Jakarta AQI - static front-end (r7, NB8 contract).
  *
  * Consumes three static files from web/data (produced by build_web_data.py):
- *   meta.json           - resolution, model_status, horizons, legend, disclaimers
- *   forecast_r{R}.json  - { model_status, anchor_ts, horizons_h,
- *                           cells: { h3_id: [ {offset_h, value, category, colour} ] } }
+ *   meta.json           - resolution, model_status, anchor_date, slot_hours, horizons, legend, disclaimers
+ *   forecast_r{R}.json  - { model_status, anchor_date, slot_hours, horizons_h,
+ *                           cells: { h3_id: { slot_h: [ {offset_h, value, category, colour} ] } } }
+ *                         (slot_h = a fixed clock slot; the page shows the slot nearest "now"
+ *                          in WIB. A legacy flat { h3_id: [ series ] } is still accepted.)
  *   hexes_r{R}.geojson  - hex-cell polygons (+ h3_id, center_lat/lon)
  *
  * AQI scale, category and colour all come from meta (exported from aqi_models.physics),
@@ -12,7 +14,7 @@
  * Two states, driven by meta.model_status:
  *   "pending_retrain" - coming-soon: map + location tools work, but per-cell values
  *                       show an honest "awaiting model output" message.
- *   "live"            - real forecasts shown (value, category, 3-step chart).
+ *   "live"            - real forecasts shown (value, category, diurnal chart).
  */
 
 const JAKARTA_CENTER = [-6.2, 106.84];
@@ -26,6 +28,7 @@ const state = {
   selectedLayer: null,
   locationMarker: null,
   chart: null,
+  currentSlot: null, // the diurnal clock slot nearest "now" (null for legacy flat data)
   mode: "current", // "current" | "other"
 };
 
@@ -44,6 +47,31 @@ function legendEntryFor(value) {
   return legend[legend.length - 1];
 }
 const colorFor = (value) => legendEntryFor(value).color;
+
+// ---------------------------------------------------------------------------
+// Diurnal clock-slice: the forecast carries every fixed clock slot; the page
+// shows the slot nearest the user's current WIB time (current + next-3, weather-
+// forecast style). The data's slots are WIB clock hours, so "now" is WIB too.
+// ---------------------------------------------------------------------------
+const pad2 = (n) => String(n).padStart(2, "0");
+const nowHourWIB = () => (new Date().getUTCHours() + 7) % 24; // WIB = UTC+7
+const circDist = (a, b) => { const d = Math.abs(a - b) % 24; return Math.min(d, 24 - d); };
+
+function nearestSlot(hour) {
+  const slots = (state.meta && state.meta.slot_hours) || [];
+  if (!slots.length) return null;
+  return slots.reduce((best, s) => (circDist(s, hour) < circDist(best, hour) ? s : best), slots[0]);
+}
+
+// The current-slot series for a cell. Accepts the slot-keyed shape
+// { slot_h: [series] } and the legacy flat [series] (returned as-is).
+function seriesForCell(h3id) {
+  const cell = cellsMap()[h3id];
+  if (!cell) return null;
+  if (Array.isArray(cell)) return cell;                       // legacy flat (single anchor)
+  const slot = state.currentSlot != null ? state.currentSlot : nearestSlot(nowHourWIB());
+  return cell[String(slot)] || cell[Object.keys(cell)[0]] || null;
+}
 
 // ---------------------------------------------------------------------------
 // Map
@@ -67,7 +95,7 @@ function styleForFeature(feature) {
   if (isPending()) {
     return { fillColor: "#cdd6e0", fillOpacity: 0.22, color: "#8aa0b8", weight: 0.4 };
   }
-  const series = cellsMap()[feature.properties.h3_id];
+  const series = seriesForCell(feature.properties.h3_id);
   const idx = series ? series[0].value : null;
   return {
     fillColor: idx === null ? state.meta.no_data_color : series[0].colour || colorFor(idx),
@@ -175,7 +203,7 @@ function selectByCell(h3id, lat, lng) {
 
   // --- LIVE state ---
   show("aqi-pending", false);
-  const series = cellsMap()[h3id];
+  const series = seriesForCell(h3id);
   if (!series) {
     show("aqi-readout", true);
     show("forecast-section", false);
@@ -203,10 +231,23 @@ function selectByCell(h3id, lat, lng) {
 // ---------------------------------------------------------------------------
 const stepLabel = (offsetH) => (offsetH === 0 ? "Now" : `+${offsetH}h`);
 
+// Absolute time of the current slot's anchor: new shape = anchor_date + slot hour;
+// legacy = meta.anchor_ts. Returns null if neither is available.
+function stepBase() {
+  if (state.meta.anchor_date && state.currentSlot != null) {
+    const d = new Date(String(state.meta.anchor_date) + "T00:00:00");
+    if (!isNaN(d.getTime())) return new Date(d.getTime() + state.currentSlot * 3600 * 1000);
+  }
+  if (state.meta.anchor_ts) {
+    const d = new Date(String(state.meta.anchor_ts).replace(" ", "T"));
+    if (!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
 function stepClock(offsetH) {
-  if (!state.meta.anchor_ts) return "";
-  const base = new Date(String(state.meta.anchor_ts).replace(" ", "T"));
-  if (isNaN(base.getTime())) return "";
+  const base = stepBase();
+  if (!base) return "";
   const t = new Date(base.getTime() + offsetH * 3600 * 1000);
   return t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
@@ -298,7 +339,10 @@ function renderBanner() {
     b.innerHTML = `<strong>PREVIEW</strong> &mdash; ${state.meta.model_note}`;
   } else {
     b.className = "banner banner-live";
-    b.innerHTML = `Live forecast &middot; anchor ${state.meta.anchor_ts || "—"} (WIB)`;
+    const anchorTxt = state.meta.anchor_date
+      ? `${state.meta.anchor_date}${state.currentSlot != null ? " " + pad2(state.currentSlot) + ":00" : ""}`
+      : (state.meta.anchor_ts || "—");
+    b.innerHTML = `Live forecast &middot; anchor ${anchorTxt} (WIB)`;
   }
 }
 
@@ -398,6 +442,7 @@ async function boot() {
     fetch(`data/hexes_r${meta.resolution}.geojson`).then((r) => r.json()),
   ]);
   state.forecast = forecast;
+  state.currentSlot = (meta.slot_hours && meta.slot_hours.length) ? nearestSlot(nowHourWIB()) : null;
   document.getElementById("res-label").textContent = "r" + meta.resolution;
 
   initMap();

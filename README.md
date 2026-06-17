@@ -61,8 +61,8 @@ mirror and a flagged API key). Step-by-step in **[DEPLOY.md](DEPLOY.md)**.
 |------|------|
 | `build_web_data.py` | Reads `hex_grid_r7.parquet` via `aqi_utils.paths`; writes the three data files. Category/colour come from `aqi_models.physics`. Modes: `pending` / `live`. |
 | `data/hexes_r7.geojson` | Hex-cell polygons (+ `h3_id`, center) — the map layer (290 mainland cells). |
-| `data/forecast_r7.json` | `{ model_status, anchor_ts, horizons_h, cells: { h3_id: [ {offset_h, value, category, colour} ] } }`. Empty `cells` in preview mode. |
-| `data/meta.json` | Resolution, `model_status`, horizons, legend, category order, disclaimers. |
+| `data/forecast_r7.json` | `{ model_status, anchor_date, slot_hours, horizons_h, cells: { h3_id: { slot_h: [ {offset_h, value, category, colour} ] } } }` — slot-keyed diurnal series; the page shows the slot nearest "now". Empty `cells` in preview mode. (A legacy flat `cells: { h3_id: [series] }` is still accepted by the front-end.) |
+| `data/meta.json` | Resolution, `model_status`, `anchor_date`, `slot_hours`, horizons, legend, category order, disclaimers. |
 | `index.html`, `app.js`, `style.css` | The static front-end (responsive; reads only `meta.json` + the two data files). |
 | `.nojekyll`, `DEPLOY.md` | GitHub Pages config + deploy guide. |
 
@@ -70,13 +70,15 @@ mirror and a flagged API key). Step-by-step in **[DEPLOY.md](DEPLOY.md)**.
 
 The front-end only knows `meta.json` + `forecast_r{R}.json`. NB8 (the inference notebook) is the
 canonical producer of the per-cell forecast; `build_web_data.py --mode live` re-shapes NB8's output
-into the contract above and keeps only cells on the current r7 grid. The `model_status` field
-drives the preview-vs-live UI, so no JavaScript changes when forecasts arrive.
+into the contract above and keeps only cells on the current r7 grid. The forecast is **slot-keyed**
+(every fixed clock slot, D-12 diurnal): the page picks the slot nearest the user's WIB time and rolls
+a current+next-3 window. The `model_status` field drives the preview-vs-live UI.
 
 ## Honest limitations (shown in the About panel)
 
-- **Morning window only** — the pre-dawn anchor + commute hours; Jakarta's afternoon peak is out of
-  scope by design.
+- **Full diurnal cycle** — the model anchors at every fixed clock slot (selectable 2/3/4-h step,
+  default 4 h) and shows the current value + next 3; the within-day shape is CAMS-derived and
+  ISPU-calibrated at the daily peak (not hourly-validatable).
 - **Per-cell accuracy is not independently validatable** — ground truth is only 5 DKI stations, so
   off-station per-cell differences are an *informed display gradient*, not a measured value.
 - **Static demonstrator** — serving a *live, on-demand* model is a separate, possibly-paid stage (a

@@ -1,14 +1,24 @@
 {
   "resolution": 7,
   "model_status": "live",
-  "model_note": "Forecast from the trained AST-GCN model (morning window, 3-hour steps).",
-  "anchor_ts": "2025-02-28 04:00:00",
+  "model_note": "Forecast from the trained AST-GCN model over the diurnal cycle (anchor + next-3 steps).",
+  "anchor_date": "2025-02-28",
+  "slot_hours": [
+    0,
+    4,
+    8,
+    12,
+    16,
+    20
+  ],
   "horizons_h": [
     0,
-    3,
-    6
+    4,
+    8,
+    12
   ],
-  "has_plus_9h": false,
+  "n_horizons": 4,
+  "n_slots": 6,
   "n_cells": 290,
   "n_forecast_cells": 290,
   "legend": [
@@ -61,8 +71,9 @@
   ],
   "no_data_color": "#BFBFBF",
   "disclaimers": [
-    "Research demonstrator for Jakarta MORNING air quality (pre-dawn anchor + commute hours); the afternoon peak is out of scope by design.",
-    "Forecasts are per H3 hex cell on the mainland-DKI grid, in 3-hour steps (now, +3h, +6h).",
+    "Research demonstrator for Jakarta air quality over the full diurnal cycle: each forecast anchors at a fixed clock slot and shows the current value plus the next 3 steps.",
+    "Forecasts are per H3 hex cell on the mainland-DKI grid, in selectable 2/3/4-hour steps (default 4 h: now, +4h, +8h, +12h).",
+    "The within-day shape is CAMS-derived and ISPU-calibrated at the daily peak; there is no hourly ground truth, so the sub-daily curve cannot be independently validated.",
     "Ground truth is only 5 DKI monitoring stations, so OFF-station (per-cell) accuracy is NOT independently validatable - per-cell differences are an informed display gradient, not a measured value. A real deployment must state this."
   ]
 }
