@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+ADMIN_PARQUET_CONTRACT.md
+build_climatology_overlay.py
+data_climatology/
