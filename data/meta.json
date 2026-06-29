@@ -1,8 +1,13 @@
 {
   "resolution": 7,
   "model_status": "live",
-  "model_note": "Modeled climatology from the trained AST-GCN forecast: the typical air for today's date (season + weekday/weekend) by time of day, refreshed daily - not a live measurement.",
-  "anchor_date": "2026-06-30",
+  "model_note": "Historical simulation from the trained AST-GCN forecast archive. Choose a historical date to inspect the modeled diurnal AQI pattern; this is not a live measurement.",
+  "anchor_date": "2026-06-28",
+  "archive": {
+    "start_date": "2024-02-02",
+    "end_date": "2025-02-28",
+    "path_pattern": "data/forecast_r{res}_{date}.json"
+  },
   "slot_hours": [
     0,
     4,
@@ -71,9 +76,29 @@
   ],
   "no_data_color": "#BFBFBF",
   "disclaimers": [
-    "The shown values are a TIME-ONLY climatology - the typical diurnal pattern for today's calendar date (its season and whether it is a weekday or weekend), distilled from the trained AST-GCN model and refreshed daily. It is NOT a live measurement or a forecast of today's specific weather.",
-    "Forecasts are per H3 hex cell on the mainland-DKI grid, in selectable 2/3/4-hour steps (default 4 h: now, +4h, +8h, +12h).",
+    "The shown values are historical model simulations for the selected date, not live measurements.",
+    "Simulated values are per H3 hex cell on the mainland-DKI grid and are displayed as a full diurnal pattern in fixed clock slots.",
     "The within-day shape is CAMS-derived and ISPU-calibrated at the daily peak; there is no hourly ground truth, so the sub-daily curve cannot be independently validated.",
     "Ground truth is only 5 DKI monitoring stations, so OFF-station (per-cell) accuracy is NOT independently validatable - per-cell differences are an informed display gradient, not a measured value. A real deployment must state this."
+  ],
+  "climatology_file_pattern": "climatology_r7_{date}.json",
+  "simulation_modes": [
+    {
+      "id": "raw",
+      "label": "Tanpa klimatologi",
+      "description": "Murni hasil model prediksi"
+    },
+    {
+      "id": "blend_climatology",
+      "label": "Dengan klimatologi",
+      "description": "50% hasil model + 50% klimatologi ISPU."
+    }
+  ],
+  "default_simulation_mode": "raw",
+  "blend_weight": 0.5,
+  "climatology_overlay_value": "ISPU index",
+  "climatology_overlay_notes": [
+    "Overlay values are converted from climatology PM2.5 ug/m3 to ISPU before browser blending.",
+    "The blended mode is a simulation/display option, not an independently validated accuracy improvement."
   ]
 }

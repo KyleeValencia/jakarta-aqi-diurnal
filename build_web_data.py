@@ -19,9 +19,9 @@ Two modes (``--mode``):
                      the full UI but an honest "awaiting model output" state.
                      Use this until the pm25_conc re-train + NB8 re-run lands.
 
-  live               Reads NB8's real per-cell forecast (the canonical NB8 output
+  historical         Reads NB8's archived per-cell forecast (the canonical NB8 output
                      ``web_data/forecast_r{R}.json``) and re-emits it in the
-                     frontend contract. This is the one-flag swap after re-train.
+                     frontend contract for historical simulation.
 
 Resolution defaults to r7 (the modelled / thesis resolution).
 
@@ -68,11 +68,11 @@ from aqi_models.config import ModelConfig  # noqa: E402
 OUT_DIR = PROJECT_ROOT / "web" / "data"
 COORD_NDIGITS = 5  # ~1 m; trims the GeoJSON payload without visible loss
 
-# Default horizons advertised when no live forecast is loaded (pending mode). In live
-# mode these are replaced by NB8's actual forecast horizons (meta.horizons_h). Derived
+# Default horizons advertised when no historical forecast is loaded (pending mode). In
+# historical mode these are replaced by NB8's actual forecast horizons (meta.horizons_h). Derived
 # from ModelConfig so it tracks the diurnal default (D-12: anchor + next-3 -> [0,4,8,12]).
 DEFAULT_HORIZONS_H = ModelConfig().forecast_offsets()
-# Default clock slots (pending mode); live mode uses NB8's meta.slot_hours. Every fixed
+# Default clock slots (pending mode); historical mode uses NB8's meta.slot_hours. Every fixed
 # slot spaced forecast_n h apart (D-12 default 4 -> [0,4,8,12,16,20]).
 DEFAULT_SLOT_HOURS = ModelConfig().anchor_hours
 
@@ -87,12 +87,9 @@ CATEGORY_ENGLISH = {
 }
 
 DISCLAIMERS = [
-    "The shown values are a TIME-ONLY climatology - the typical diurnal pattern for today's "
-    "calendar date (its season and whether it is a weekday or weekend), distilled from the trained "
-    "AST-GCN model and refreshed daily. It is NOT a live measurement or a forecast of today's "
-    "specific weather.",
-    "Forecasts are per H3 hex cell on the mainland-DKI grid, in selectable 2/3/4-hour steps "
-    "(default 4 h: now, +4h, +8h, +12h).",
+    "The shown values are historical model simulations for the selected date, not live measurements.",
+    "Simulated values are per H3 hex cell on the mainland-DKI grid and are displayed as a full diurnal "
+    "pattern in fixed clock slots.",
     "The within-day shape is CAMS-derived and ISPU-calibrated at the daily peak; there is no "
     "hourly ground truth, so the sub-daily curve cannot be independently validated.",
     "Ground truth is only 5 DKI monitoring stations, so OFF-station (per-cell) accuracy is NOT "
@@ -100,13 +97,25 @@ DISCLAIMERS = [
     "measured value. A real deployment must state this.",
 ]
 
+# Date-picker archive of historical per-date forecasts (data/forecast_r{res}_{date}.json,
+# already produced by a separate backtest pipeline — this build script does not generate
+# them). Single source of truth for the front-end's date-picker bounds + file pattern; if
+# the archive range changes, update only here.
+ARCHIVE_CONFIG = {
+    "start_date": "2024-02-02",
+    "end_date": "2025-02-28",
+    "path_pattern": "data/forecast_r{res}_{date}.json",
+}
+
 PENDING_NOTE = (
-    "Model output is being re-trained (pm25_conc target). Forecast values are not yet "
+    "Model output is being re-trained (pm25_conc target). Simulation values are not yet "
     "published - the map and location tools work, but per-cell values show "
     "'awaiting model output'."
 )
-LIVE_NOTE = ("Modeled climatology from the trained AST-GCN forecast: the typical air for today's date "
-             "(season + weekday/weekend) by time of day, refreshed daily - not a live measurement.")
+LIVE_NOTE = (
+    "Historical simulation from the trained AST-GCN output archive. Choose a historical date to "
+    "inspect the modeled diurnal AQI pattern; this is not a live measurement."
+)
 
 
 # -----------------------------------------------------------------------------
@@ -175,7 +184,7 @@ def load_nb8_forecast(res: int, grid_ids: set) -> tuple[dict, str | None, list |
     nb8 = Path(paths.WORKING_ROOT) / "web_data" / f"forecast_r{res}.json"
     if not nb8.exists():
         raise FileNotFoundError(
-            f"--mode live needs NB8 output at {nb8} (run NB8 inference + mirror it)."
+            f"--mode historical needs NB8 output at {nb8} (run NB8 inference + mirror it)."
         )
     raw = json.loads(nb8.read_text(encoding="utf-8"))
     anchor = horizons = slot_hours = None
@@ -188,7 +197,7 @@ def load_nb8_forecast(res: int, grid_ids: set) -> tuple[dict, str | None, list |
     cells = {hid: slots for hid, slots in raw.items() if hid in grid_ids}
     dropped = len(raw) - len(cells)
     if dropped:
-        print(f"[build] live: kept {len(cells)} cells, dropped {dropped} not on the r{res} grid")
+        print(f"[build] historical: kept {len(cells)} cells, dropped {dropped} not on the r{res} grid")
     if cells:                                   # fallbacks straight from the served data
         any_slots = next(iter(cells.values()))  # { slot_h: [series] }
         if slot_hours is None:
@@ -205,9 +214,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Build the static Jakarta-AQI web data.")
     ap.add_argument(
         "--mode",
-        choices=["pending", "live"],
+        choices=["pending", "historical"],
         default="pending",
-        help="pending = coming-soon (empty forecast); live = read NB8's real forecast.",
+        help="pending = empty forecast; historical = read NB8's archived forecast.",
     )
     ap.add_argument("--resolution", type=int, default=7, help="H3 resolution (default 7).")
     args = ap.parse_args()
@@ -225,11 +234,11 @@ def main() -> None:
     n_geo = write_geojson(gdf, res)
     grid_ids = set(gdf["h3_id"])
 
-    if args.mode == "live":
+    if args.mode == "historical":
         cells, anchor, horizons, slot_hours = load_nb8_forecast(res, grid_ids)
         horizons = horizons or DEFAULT_HORIZONS_H
         slot_hours = slot_hours or DEFAULT_SLOT_HOURS
-        model_status = "live"
+        model_status = "historical"
         model_note = LIVE_NOTE
     else:
         cells, anchor = {}, None
@@ -248,7 +257,7 @@ def main() -> None:
     }
     fpath = OUT_DIR / f"forecast_r{res}.json"
     fpath.write_text(json.dumps(forecast, separators=(",", ":")), encoding="utf-8")
-    print(f"[build] wrote {fpath.name} ({len(cells)} forecast cells, status={model_status})")
+    print(f"[build] wrote {fpath.name} ({len(cells)} simulated cells, status={model_status})")
 
     # --- Meta (legend + status + disclaimers) ---
     meta = {
@@ -256,6 +265,7 @@ def main() -> None:
         "model_status": model_status,
         "model_note": model_note,
         "anchor_date": anchor,
+        "archive": ARCHIVE_CONFIG,
         "slot_hours": slot_hours,
         "horizons_h": horizons,
         "n_horizons": len(horizons),

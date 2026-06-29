@@ -3,61 +3,161 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Jakarta Air Quality &mdash; hex-grid forecast</title>
+  <title>Jakarta Air Quality &mdash; historical simulation</title>
 
   <!-- Leaflet (map) -->
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="landing-open">
   <!-- Status banner (text + style set from meta.model_status by app.js) -->
-  <div id="status-banner" class="banner"></div>
+  <div id="status-banner" class="banner is-empty" aria-hidden="true"></div>
 
-  <header id="topbar">
-    <div class="brand">
-      <h1>Jakarta Air Quality</h1>
-      <span class="subtitle">Diurnal AQI forecast &middot; H3 hex grid &middot; <span id="res-label">r7</span></span>
-    </div>
-    <button id="about-btn" class="ghost-btn" type="button">About</button>
-  </header>
+  <header id="topbar" class="navbar bg-white border-bottom px-3 py-2 is-empty" aria-hidden="true"></header>
 
   <main id="layout">
+    <!-- LandingHero - map-first entry overlay with research-dashboard context. -->
+    <section id="landing" class="landing-hero" aria-labelledby="landing-title">
+      <div class="landing-content">
+        <div class="landing-copy">
+          <p class="landing-kicker">H3 r7 historical AQI simulator</p>
+          <h2 id="landing-title">Explore Jakarta's modeled air-quality rhythm</h2>
+          <p class="landing-lede">
+            Inspect the trained AST-GCN archive by date, then resolve any Jakarta location
+            to its mainland-DKI hex cell and diurnal ISPU pattern.
+          </p>
+          <div class="landing-actions">
+            <button id="landing-start" class="btn btn-primary landing-primary" type="button">Explore simulation</button>
+            <button id="landing-about" class="btn btn-outline-light landing-secondary" type="button">Method notes</button>
+          </div>
+          <p class="landing-honesty">Historical model simulation only &middot; not a live measurement.</p>
+        </div>
+
+        <div class="landing-panel" aria-label="Simulation summary">
+          <div class="landing-panel-head">
+            <span class="landing-panel-label">Research dashboard</span>
+            <strong>Jakarta mainland grid</strong>
+          </div>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <span>Archive</span>
+              <strong id="landing-archive-range">2024-02-02 to 2025-02-28</strong>
+            </div>
+            <div class="metric-item">
+              <span>Coverage</span>
+              <strong id="landing-cell-count">290 H3 cells</strong>
+            </div>
+            <div class="metric-item">
+              <span>Clock slots</span>
+              <strong id="landing-slot-list">00, 04, 08, 12, 16, 20 WIB</strong>
+            </div>
+            <div class="metric-item">
+              <span>Default view</span>
+              <strong id="landing-mode-label">Tanpa klimatologi</strong>
+            </div>
+          </div>
+          <div id="landing-scale-strip" class="landing-scale-strip" aria-label="ISPU category colors"></div>
+          <div class="landing-flow" aria-label="Simulation flow">
+            <span>
+              <strong>Date archive</strong>
+              <em>Pick the historical day to inspect.</em>
+            </span>
+            <span>
+              <strong>H3 location</strong>
+              <em>Match a coordinate to its Jakarta hex cell.</em>
+            </span>
+            <span>
+              <strong>Peak + curve</strong>
+              <em>Show the daily peak and diurnal pattern.</em>
+            </span>
+          </div>
+          <div class="landing-quick" aria-label="Quick start dates">
+            <span class="landing-panel-label">Quick start</span>
+            <div class="landing-quick-grid">
+              <button id="landing-first-date" class="btn btn-light btn-sm" type="button">
+                <strong>First date</strong>
+                <span>Open the earliest saved simulation.</span>
+              </button>
+              <button id="landing-latest-date" class="btn btn-light btn-sm" type="button">
+                <strong>Latest date</strong>
+                <span>Open the newest saved simulation.</span>
+              </button>
+              <button id="landing-manual-date" class="btn btn-primary btn-sm" type="button">
+                <strong>Choose manually</strong>
+                <span>Select any date in the archive.</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <div id="map"></div>
+    <button id="sidebar-toggle" class="sidebar-toggle" type="button"
+      aria-controls="sidebar" aria-expanded="true" aria-label="Collapse side panel"
+      title="Collapse side panel">
+      <span class="sidebar-toggle-icon" aria-hidden="true"></span>
+    </button>
 
     <aside id="sidebar">
+      <!-- 0 - historical simulation date -->
+      <section class="card app-card shadow-sm" id="date-card">
+        <h2>Historical data date</h2>
+        <div id="panel-date-archive" class="mode-panel">
+          <div class="date-row">
+            <input id="date-input" class="form-control" type="date" />
+            <button id="date-confirm-btn" class="btn btn-primary primary date-confirm" type="button">Show date</button>
+          </div>
+          <p class="hint" id="date-hint"></p>
+        </div>
+      </section>
+
       <!-- 1 - location -->
-      <section class="card" id="location-card">
+      <section class="card app-card shadow-sm" id="location-card">
         <h2><span class="step-n">1</span> Choose a location</h2>
-        <div class="mode-row">
-          <button id="mode-current" class="mode-btn active" type="button">My location</button>
-          <button id="mode-other" class="mode-btn" type="button">Lat / lon</button>
+        <div class="mode-row btn-group w-100" role="group" aria-label="Location input mode">
+          <button id="mode-current" class="btn btn-outline-primary mode-btn active" type="button">My location</button>
+          <button id="mode-other" class="btn btn-outline-primary mode-btn" type="button">Lat / lon</button>
         </div>
 
         <div id="panel-current" class="mode-panel">
-          <button id="locate-btn" class="primary" type="button">Locate me</button>
+          <button id="locate-btn" class="btn btn-primary primary" type="button">Locate me</button>
           <p id="locate-hint" class="hint">Your browser will ask permission to share your location.</p>
         </div>
 
         <div id="panel-other" class="mode-panel hidden">
-          <div class="latlon-row">
-            <label>Lat <input id="lat-input" type="number" step="0.0001" value="-6.1751" /></label>
-            <label>Lon <input id="lon-input" type="number" step="0.0001" value="106.8650" /></label>
+          <div class="row g-2 latlon-row">
+            <label class="col form-label">Lat <input id="lat-input" class="form-control form-control-sm" type="number" step="0.0001" value="-6.1751" /></label>
+            <label class="col form-label">Lon <input id="lon-input" class="form-control form-control-sm" type="number" step="0.0001" value="106.8650" /></label>
           </div>
-          <button id="go-btn" class="primary" type="button">Show this location</button>
+          <button id="go-btn" class="btn btn-primary primary" type="button">Show this location</button>
           <p class="hint">&hellip; or click anywhere on the map.</p>
         </div>
       </section>
 
+      <!-- 1b - simulation mode -->
+      <section class="card app-card shadow-sm" id="simulation-card">
+        <h2>Simulation mode</h2>
+        <div class="mode-row btn-group w-100 simulation-row" role="group" aria-label="Simulation mode">
+          <button id="sim-raw" class="btn btn-outline-primary mode-btn active" type="button">Tanpa klimatologi</button>
+          <button id="sim-blend" class="btn btn-outline-primary mode-btn" type="button">Dengan klimatologi</button>
+        </div>
+        <p id="simulation-note" class="hint"></p>
+      </section>
+
       <!-- 2 - result -->
-      <section class="card hidden" id="result-card">
-        <h2><span class="step-n">2</span> Predicted AQI</h2>
+      <section class="card app-card shadow-sm hidden" id="result-card">
+        <h2><span class="step-n">2</span> Simulated AQI</h2>
         <div id="result-meta" class="result-meta"></div>
 
-        <!-- live readout -->
+        <!-- historical simulation readout -->
         <div id="aqi-readout" class="hidden">
           <div id="aqi-value">&mdash;</div>
           <div id="aqi-badge" class="badge">&mdash;</div>
         </div>
+        <div id="peak-summary" class="peak-summary hidden"></div>
 
         <!-- pending / coming-soon readout -->
         <div id="aqi-pending" class="pending-box hidden">
@@ -65,16 +165,18 @@
           <p class="pending-text" id="pending-text"></p>
         </div>
 
-        <!-- forecast (live only) -->
+        <!-- historical diurnal simulation -->
         <div id="forecast-section" class="hidden">
-          <h3 id="chart-title" class="chart-title">Forecast</h3>
-          <canvas id="forecast-chart" height="170"></canvas>
+          <h3 id="chart-title" class="chart-title">Diurnal pattern</h3>
+          <div class="chart-panel" aria-label="Diurnal AQI chart">
+            <canvas id="forecast-chart" height="150"></canvas>
+          </div>
           <div id="step-badges" class="step-badges"></div>
         </div>
       </section>
 
       <!-- 3 - legend -->
-      <section class="card" id="legend-card">
+      <section class="card app-card shadow-sm" id="legend-card">
         <h2>Air-quality scale (ISPU)</h2>
         <ul id="legend-list" class="legend"></ul>
       </section>
@@ -87,32 +189,30 @@
       <button id="about-close" class="overlay-close" type="button" aria-label="Close">&times;</button>
       <h2>About this map</h2>
       <p>
-        A research forecast of air quality across Jakarta over the <strong>full diurnal cycle</strong>,
-        predicted on a hexagonal <a href="https://h3geo.org/" target="_blank" rel="noopener">H3</a> grid
-        (resolution <strong>r7</strong>, ~1.4&nbsp;km cells) covering mainland DKI Jakarta. An attention
-        spatio-temporal graph neural network (AST-GCN) forecasts the Indonesian air-quality index (ISPU);
-        the page anchors at the fixed clock slot nearest your current <strong>WIB</strong> time and shows
-        that point plus the next three steps. The within-day shape is a <strong>modeled, representative
-        pattern</strong> (CAMS-derived, calibrated to the daily peak) &mdash; not a live measurement, and
-        the underlying day is the latest modeled date, not today. Pick a location and the page resolves it
-        to its hex cell and shows that cell's forecast.
+        A research simulation of Jakarta air quality across the <strong>full diurnal cycle</strong>,
+        simulated on a hexagonal <a href="https://h3geo.org/" target="_blank" rel="noopener">H3</a> grid
+        (resolution <strong>r7</strong>, ~1.4&nbsp;km cells) covering mainland DKI Jakarta. Choose a
+        historical date, press <strong>Show date</strong>, then pick a location. The page resolves that
+        location to its hex cell and shows the modeled AQI pattern for that historical day, including the
+        hour with the highest simulated AQI.
       </p>
       <h3>Important limitations</h3>
       <ul id="about-disclaimers" class="about-list"></ul>
       <p class="about-foot">
-        Built from the project's static prediction output &mdash; no live model server. Map tiles
+        Built from the project's static historical simulation output &mdash; no live model server. Map tiles
         &copy; OpenStreetMap contributors.
       </p>
     </div>
   </div>
 
-  <footer id="footer-note"></footer>
+  <footer id="footer-note" class="is-empty" aria-hidden="true"></footer>
 
   <!-- libraries -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- h3-js v4 (UMD global `h3`). v4 API only: latLngToCell, NOT v3 geoToH3. -->
   <script src="https://cdn.jsdelivr.net/npm/h3-js@4.1.0/dist/h3-js.umd.js"></script>
-  <script src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="app.js?v=simulation-mode-copy-20260627"></script>
 </body>
 </html>
