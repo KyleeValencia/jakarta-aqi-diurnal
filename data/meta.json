@@ -2,7 +2,7 @@
   "resolution": 7,
   "model_status": "live",
   "model_note": "Historical simulation from the trained AST-GCN forecast archive. Choose a historical date to inspect the modeled diurnal AQI pattern; this is not a live measurement.",
-  "anchor_date": "2026-07-01",
+  "anchor_date": "2026-07-02",
   "archive": {
     "start_date": "2024-02-02",
     "end_date": "2025-02-28",
