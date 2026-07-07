@@ -55,7 +55,6 @@ from __future__ import annotations
 
 import argparse
 import glob
-import json
 import os
 import sys
 from pathlib import Path
@@ -71,8 +70,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "jakarta-aqi-utils-fix"))
 
 from aqi_utils import paths as P            # noqa: E402
 from aqi_models.config import ModelConfig   # noqa: E402
-from aqi_models.physics import (  # noqa: E402
-    pm25_to_ispu, ispu_to_category, ispu_to_color, ISPU_CATEGORY_COLOR)
+from aqi_models.physics import pm25_to_ispu, ispu_to_category  # noqa: E402
 
 OFFSETS = ModelConfig().forecast_offsets()                 # [0, 4, 8, 12]
 PRED_COLS = [f"pred_a_plus_{o}h" for o in OFFSETS]
@@ -215,72 +213,6 @@ def verify(mw, doy_sm, colidx, alpha):
 
 
 # --------------------------------------------------------------------------- #
-# Serve (the light daily-cron step): climatology table + date -> NB8-style web JSON
-# --------------------------------------------------------------------------- #
-def _forecast_point(offset_h, ugm3):
-    """MIRRORS notebook_8_inference._forecast_point (pm25_conc mode): clamp neg/NaN -> 0,
-    ug/m3 -> ISPU index via pm25_to_ispu, value = round(idx, 1) + category + colour.
-    Kept byte-compatible so build_web_data.py --mode live consumes it unchanged."""
-    v = float(ugm3)
-    if not np.isfinite(v) or v < 0.0:                  # GNN head can dip negative -> clamp
-        v = 0.0
-    idx = pm25_to_ispu(v)
-    if idx is None or not np.isfinite(idx):
-        idx = 0.0
-    return {"offset_h": int(offset_h), "value": round(idx, 1),
-            "category": ispu_to_category(idx), "colour": ispu_to_color(idx)}
-
-
-def serve(date: pd.Timestamp, res: int, model: str):
-    """Emit today's NB8-style web_data JSON from the prebuilt climatology artifact.
-    This is the LIGHT step the daily cron runs (pure lookup + reshape, no forecast read):
-    select the (doy, weekend) rows -> {h3_id: {slot: [point...]}} + meta -> WORKING/web_data.
-    """
-    art = P.WORKING_ROOT / "climatology" / f"climatology_r{res}_{model}.parquet"
-    if not art.exists():
-        raise FileNotFoundError(f"{art} missing — run `build_climatology.py --build` first.")
-    tbl = pd.read_parquet(art)
-    doy = int(date.dayofyear)
-    wend = 1 if date.dayofweek >= 5 else 0
-    day = tbl[(tbl["doy"] == doy) & (tbl["wend"] == wend)]
-    if day.empty:                                      # e.g. doy 366 on a non-leap lookup
-        doy = min(doy, int(tbl["doy"].max()))
-        day = tbl[(tbl["doy"] == doy) & (tbl["wend"] == wend)]
-
-    cells: dict = {}
-    for _, row in day.iterrows():
-        pts = [_forecast_point(o, row[f"pred_a_plus_{o}h"]) for o in OFFSETS]
-        cells.setdefault(row["h3_id"], {})[str(int(row["slot_h"]))] = pts
-    slot_hours = sorted(int(s) for s in day["slot_h"].unique())
-
-    meta = {
-        "resolution": res,
-        "anchor_date": str(pd.Timestamp(date).date()),
-        "slot_hours": slot_hours,
-        "horizons_h": [int(o) for o in OFFSETS],
-        "n_horizons": len(OFFSETS),
-        "n_slots": len(slot_hours),
-        "n_cells": len(cells),
-        "category_legend": {c: ISPU_CATEGORY_COLOR[c] for c in ISPU_CATEGORY_COLOR},
-        "time_key": "combined_blend: 0.5*(doy+weekend) + 0.5*(month+weekend)",
-        "served_by": "build_climatology.py --serve",
-    }
-    out = P.ensure_dir(P.WORKING_ROOT / "web_data")
-    with open(out / f"forecast_r{res}.json", "w") as fh:
-        json.dump(cells, fh)
-    with open(out / "meta.json", "w") as fh:
-        json.dump(meta, fh, indent=2)
-
-    sample = next(iter(cells))
-    s0 = sorted(cells[sample], key=int)[0]
-    kind = "weekend" if wend else "weekday"
-    print(f"[serve] {meta['anchor_date']} (doy {doy}, {kind}) -> {out}")
-    print(f"[serve]   {len(cells)} cells x {len(slot_hours)} slots {slot_hours} | horizons {OFFSETS}")
-    print(f"[serve]   sample {sample} slot {s0}: "
-          + " ".join(f"+{p['offset_h']}h={p['value']}({p['category']})" for p in cells[sample][s0]))
-
-
-# --------------------------------------------------------------------------- #
 # Cron artifact: a compact, committable climatology for the web-repo daily cron
 # --------------------------------------------------------------------------- #
 def write_cron_artifact(res: int, model: str):
@@ -311,20 +243,17 @@ def write_cron_artifact(res: int, model: str):
 # Main
 # --------------------------------------------------------------------------- #
 def main():
-    ap = argparse.ArgumentParser(description="Build / verify / serve the time-only AQI climatology.")
+    ap = argparse.ArgumentParser(description="Build / verify the time-only AQI climatology.")
     ap.add_argument("--resolution", type=int, default=7)
     ap.add_argument("--model", default="astgcn")
     ap.add_argument("--forecast", default=None, help="explicit forecast parquet (else auto-discover)")
     ap.add_argument("--alpha", type=float, default=DEFAULT_ALPHA, help="blend weight on DOY (1-alpha on MW)")
     ap.add_argument("--verify", action="store_true", help="print the seasonality proof")
     ap.add_argument("--build", action="store_true", help="write the climatology parquet artifact")
-    ap.add_argument("--serve", action="store_true",
-                    help="emit today's NB8-style web_data JSON from the artifact (the daily-cron step)")
-    ap.add_argument("--date", default=None, help="serve date YYYY-MM-DD (default: today WIB)")
     ap.add_argument("--cron-artifact", action="store_true",
                     help="write the compact web/data climatology parquet for the web-repo daily cron")
     args = ap.parse_args()
-    if not (args.verify or args.build or args.serve or args.cron_artifact):   # default: build + verify
+    if not (args.verify or args.build or args.cron_artifact):   # default: build + verify
         args.verify = args.build = True
 
     if args.build or args.verify:
@@ -345,11 +274,6 @@ def main():
             print(f"\n[clim] wrote {out}")
             print(f"[clim]   {len(tbl):,} rows = {tbl['h3_id'].nunique()} cells x {tbl['slot_h'].nunique()} slots "
                   f"x {N_DOY} doy x 2 wend | offsets {OFFSETS} | rows with any NaN: {nn}")
-
-    if args.serve:
-        date = (pd.Timestamp(args.date) if args.date
-                else pd.Timestamp.now(tz="Asia/Jakarta").tz_localize(None).normalize())
-        serve(date, args.resolution, args.model)
 
     if args.cron_artifact:
         write_cron_artifact(args.resolution, args.model)

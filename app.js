@@ -23,6 +23,16 @@
  */
 
 const JAKARTA_CENTER = [-6.2, 106.84];
+
+// The 5 hex cells containing an ISPU ground station (r7): the ONLY cells whose value
+// is validated against a measurement. Every other cell is a covariate-driven estimate
+// (see the AOA / honesty boundary), so the optional "blur unvalidated" toggle keeps
+// these 5 sharp and fades the other 285. IDs from aqi_models.masking.station_node_mask
+// (DKI1..DKI5); recompute if the grid/stations change.
+const STATION_CELLS = new Set([
+  "878c10799ffffff", "878c10792ffffff", "878c10703ffffff", "878c107a6ffffff", "878c10612ffffff",
+]);
+
 const state = {
   meta: null,
   forecast: null,
@@ -41,6 +51,7 @@ const state = {
   archiveCache: new Map(), // date -> forecast object, or null if known-missing
   climatologyCache: new Map(), // date -> climatology overlay object, or null if known-missing
   simulationMode: "raw", // "raw" | "blend_climatology"
+  blurUnvalidated: false, // ON => fade the 285 unvalidated cells, keep the 5 station cells sharp
 };
 
 // Fallback if meta.json predates the archive feature; meta.archive (when present) wins.
@@ -165,15 +176,20 @@ function styleForFeature(feature) {
   if (isPending()) {
     return { fillColor: "#cdd6e0", fillOpacity: 0.22, color: "#8aa0b8", weight: 0.4 };
   }
-  const series = diurnalSeriesForCell(feature.properties.h3_id);
+  const id = feature.properties.h3_id;
+  const series = diurnalSeriesForCell(id);
   const peak = peakForSeries(series);
   const idx = peak ? peak.value : null;
-  return {
-    fillColor: idx === null ? state.meta.no_data_color : peak.colour || colorFor(idx),
-    fillOpacity: 0.4,
-    color: "#5b6573",
-    weight: 0.3,
-  };
+  const fillColor = idx === null ? state.meta.no_data_color : peak.colour || colorFor(idx);
+  if (state.blurUnvalidated && !STATION_CELLS.has(id)) {
+    // Unvalidated (285 cells): fade to a hazy wash + dashed edge so it doesn't read as measured.
+    return { fillColor, fillOpacity: 0.1, color: "#c3ccd6", weight: 0.2, dashArray: "2 3" };
+  }
+  if (state.blurUnvalidated && STATION_CELLS.has(id)) {
+    // Validated (5 station cells): keep crisp + a bold border so they stand out.
+    return { fillColor, fillOpacity: 0.8, color: "#111", weight: 2 };
+  }
+  return { fillColor, fillOpacity: 0.4, color: "#5b6573", weight: 0.3 };
 }
 
 function addGeoLayer(geojson) {
@@ -481,6 +497,19 @@ function setMode(mode) {
   show("panel-other", mode === "other");
 }
 
+// Optional honesty view: fade the 285 covariate-estimate cells, keep the 5 validated
+// station cells sharp. Off by default; toggled by the "Buramkan sel tak-tervalidasi" button.
+function setBlurUnvalidated(on) {
+  state.blurUnvalidated = on;
+  const btn = document.getElementById("blur-toggle");
+  btn.classList.toggle("active", on);
+  btn.setAttribute("aria-pressed", String(on));
+  if (state.geoLayer && !isPending()) {
+    state.geoLayer.setStyle(styleForFeature);
+    if (state.selectedLayer) highlight(state.selectedLayer); // re-assert the selection outline
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Date picker (archive): load an already-built per-date file from the archive.
 // Lazily fetched + cached; missing dates degrade to an inline message.
@@ -678,6 +707,7 @@ function wireControls() {
   document.getElementById("date-confirm-btn").addEventListener("click", confirmArchiveDate);
   document.getElementById("sim-raw").addEventListener("click", () => setSimulationMode("raw"));
   document.getElementById("sim-blend").addEventListener("click", () => setSimulationMode("blend_climatology"));
+  document.getElementById("blur-toggle").addEventListener("click", () => setBlurUnvalidated(!state.blurUnvalidated));
   document.getElementById("date-input").addEventListener("change", (e) => {
     const hint = document.getElementById("date-hint");
     hint.classList.remove("warn");
