@@ -46,7 +46,7 @@ python -m http.server 8001        # fetch() needs http, not file://
 #   -> open http://localhost:8001
 ```
 
-(The repo's `.claude/launch.json` has an `aqi-web` config that does exactly this.) Geolocation
+Geolocation
 works on `localhost` (and on HTTPS in production). Map tiles, Leaflet, Chart.js and h3-js load from
 CDNs, so the page needs internet at runtime.
 
