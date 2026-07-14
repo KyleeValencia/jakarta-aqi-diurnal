@@ -416,6 +416,20 @@ body.landing-open .leaflet-control-container {
   border-radius: 8px;
 }
 .mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+#blur-toggle.active,
+#blur-toggle[aria-pressed="true"] {
+  background: #1c6b3a;
+  border-color: #1c6b3a;
+  color: #fff;
+}
+
+#blur-toggle.active:hover,
+#blur-toggle[aria-pressed="true"]:hover {
+  background: #15552e;
+  border-color: #15552e;
+  color: #fff;
+}
 .simulation-row { margin-bottom: 4px; }
 #simulation-card h2 { margin-bottom: 10px; }
 
@@ -457,6 +471,39 @@ button.primary:hover { filter: brightness(1.05); }
 .date-confirm {
   width: 100%;
   white-space: nowrap;
+}
+
+#date-card.date-required {
+  border-color: #b4541a;
+  box-shadow: 0 0 0 3px rgba(180, 84, 26, 0.12);
+}
+
+.date-required-badge {
+  margin-left: auto;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #b4541a;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.app-card.date-locked {
+  opacity: 0.62;
+}
+
+.app-card.date-locked h2::after {
+  content: "Terkunci";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.date-gated-control:disabled {
+  pointer-events: auto;
+  cursor: not-allowed;
 }
 
 /* ---- result ---- */

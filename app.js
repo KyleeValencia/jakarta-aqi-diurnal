@@ -64,6 +64,23 @@ const DEFAULT_ARCHIVE = {
 const isPending = () => !state.meta || !state.forecast || state.meta.model_status === "pending_retrain";
 const cellsMap = () => (state.forecast && state.forecast.cells) || {};
 const show = (id, on) => document.getElementById(id).classList.toggle("hidden", !on);
+const DATE_GATED_BUTTON_IDS = [
+  "mode-current", "mode-other", "locate-btn", "go-btn",
+  "sim-raw", "sim-blend", "blur-toggle",
+];
+const DATE_GATED_CARD_IDS = [
+  "location-card", "simulation-card", "display-card",
+];
+
+function hasLoadedSelectedDate() {
+  const input = document.getElementById("date-input");
+  return Boolean(
+    state.archiveDate &&
+    state.forecast &&
+    input &&
+    input.value === state.archiveDate
+  );
+}
 
 const DEFAULT_SIMULATION_MODES = [
   { id: "raw", label: "Tanpa klimatologi", description: "Murni hasil model prediksi" },
@@ -231,7 +248,7 @@ function addGridMask() {
     pane: "maskPane",
     stroke: false,
     fillColor: "#e9eef3",
-    fillOpacity: 1,
+    fillOpacity: 0.5,
     interactive: false,
   }).addTo(state.map);
 
@@ -510,6 +527,39 @@ function setBlurUnvalidated(on) {
   }
 }
 
+function syncHistoricalDateGate() {
+  const locked = !hasLoadedSelectedDate();
+
+  DATE_GATED_BUTTON_IDS.forEach((id) => {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.disabled = locked;
+    button.classList.toggle("date-gated-control", locked);
+    button.setAttribute("aria-disabled", String(locked));
+  });
+
+  DATE_GATED_CARD_IDS.forEach((id) => {
+    const card = document.getElementById(id);
+    if (!card) return;
+    card.classList.toggle("date-locked", locked);
+    card.setAttribute("aria-disabled", String(locked));
+  });
+
+  document.getElementById("date-card")
+    .classList.toggle("date-required", locked);
+  document.getElementById("date-required-badge")
+    .classList.toggle("hidden", !locked);
+
+  if (locked) {
+    const arc = archiveConfig();
+    const hint = document.getElementById("date-hint");
+    hint.textContent =
+      `Choose and load a historical date (${arc.start_date} to ${arc.end_date}) ` +
+      `to enable the controls below.`;
+    hint.classList.add("warn");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Date picker (archive): load an already-built per-date file from the archive.
 // Lazily fetched + cached; missing dates degrade to an inline message.
@@ -613,6 +663,7 @@ async function onArchiveDateChange(dateStr) {
   hint.classList.toggle("warn", statusWarn);
   renderAbout();
   refreshAfterForecastChange();
+  syncHistoricalDateGate();
 }
 
 function confirmArchiveDate() {
@@ -710,8 +761,16 @@ function wireControls() {
   document.getElementById("blur-toggle").addEventListener("click", () => setBlurUnvalidated(!state.blurUnvalidated));
   document.getElementById("date-input").addEventListener("change", (e) => {
     const hint = document.getElementById("date-hint");
-    hint.classList.remove("warn");
-    hint.textContent = `Selected ${e.target.value}. Press Show date to load the historical simulation.`;
+    syncHistoricalDateGate();
+    if (!e.target.value) return;
+    if (hasLoadedSelectedDate()) {
+      hint.textContent = `Showing the historical simulation for ${e.target.value}.`;
+      hint.classList.remove("warn");
+      return;
+    }
+    hint.textContent =
+      `Selected ${e.target.value}. Press Show date to load it and enable the controls below.`;
+    hint.classList.add("warn");
   });
   document.getElementById("date-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
@@ -860,6 +919,7 @@ async function boot() {
   renderLandingDashboard();
   wireControls();
   setMode("current");
+  syncHistoricalDateGate();
 }
 
 boot().catch((e) => {

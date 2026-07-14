@@ -3,19 +3,19 @@ build_climatology.py
 ====================
 
 Distil the trained AST-GCN diurnal forecast into a **time-only climatology** for
-the static, daily-refreshed website (D-12 deployment, Kylee 2026-06-17).
+the static per-date archive website (D-12 deployment, 2026-06-17).
 
 WHY
 ---
-The served forecast must depend on **time only** (no live data feed) and refresh
-**daily** in the cloud (free GitHub Actions cron, not a PC, not a paid server).
-So we precompute, per hex cell, the *typical* diurnal curve as a function of the
-calendar, and a tiny daily job just looks up "today".
+The served forecast must depend on **time only** (no live data feed). The site is a
+pure static per-date archive, built once and committed; the browser picks the date, and
+NO scheduled task runs — the daily GitHub Actions cron this file once fed was retired
+2026-07-04. So the *typical* diurnal curve is precomputed per hex cell by calendar key.
 
-THE TIME KEY = COMBINED (equal blend) — Kylee's pick (½ DOY + ½ MW)
--------------------------------------------------------------------
+THE TIME KEY = COMBINED (equal blend, ½ DOY + ½ MW)
+---------------------------------------------------
 Month×weekday and day-of-year+weekday are the SAME seasonal signal at two
-resolutions, so we *blend* them rather than stack them:
+resolutions, so they are *blended* rather than stacked:
 
     climatology(date) = 0.5 * DOY_smooth(day_of_year, weekend)      # daily drift
                       + 0.5 * MW(month, weekend)                    # robust level
@@ -26,7 +26,7 @@ resolutions, so we *blend* them rather than stack them:
   * MW — the month×weekday/weekend bucket mean (lots of samples → robust level).
   * weekend = (weekday ∈ {Sat,Sun}); present in BOTH components.
 
-Net: changes every day (Kylee wanted daily output) but anchored to a stable,
+Net: changes every day (daily output is required) but anchored to a stable,
 well-sampled monthly level, and smoother than raw month-stepping.
 
 WHAT IT PRODUCES
@@ -36,8 +36,8 @@ Two layers (this script is the heavy, build-ONCE layer):
   --build   forecast parquet → climatology table
             WORKING_ROOT/jakarta_data/climatology/climatology_r{R}_{model}.parquet
             keyed by (doy, weekend, h3_id, slot_h) with one column per offset.
-            (The light daily cron — a later step — just selects today's rows and
-            re-emits NB8's slot-keyed web JSON; this artifact is a pure lookup.)
+            (Serving reads a committed per-date archive; the light daily cron that
+            once selected "today" from this table is retired. Pure lookup either way.)
 
   --verify  print the city-mean 6-point day-curve for a Jan weekday, a Jun
             weekday and a Jun weekend, to prove seasonality + weekday/weekend +
@@ -213,15 +213,17 @@ def verify(mw, doy_sm, colidx, alpha):
 
 
 # --------------------------------------------------------------------------- #
-# Cron artifact: a compact, committable climatology for the web-repo daily cron
+# Cron artifact: RETIRED (2026-07-04). Kept for reproducibility, not used to serve.
 # --------------------------------------------------------------------------- #
 def write_cron_artifact(res: int, model: str):
-    """Compact, committable copy of the climatology for the web-repo daily cron.
+    """Compact, committable copy of the climatology. RETIRED — not part of serving.
 
-    The web repo (jakarta-aqi-diurnal) is the ONLY git repo (this project root is not),
-    so the daily GitHub Actions cron runs THERE, self-contained, with NO aqi_models. It
-    reads this compact file (categorical h3_id + small int keys + float32 µg/m³ + zstd)
-    and vendors a tiny ISPU snippet. Master stays full-precision for analysis.
+    Written for a daily GitHub Actions cron in the web repo. That cron was retired on
+    2026-07-04: the live site is a pure static per-date archive with client-side date
+    selection, so no scheduled task reads this file. The function and the
+    `--cron-artifact` flag are kept because the compact encoding (categorical h3_id +
+    small int keys + float32 µg/m³ + zstd) is still the cheapest way to ship the table.
+    Master stays full-precision for analysis.
     """
     master = P.WORKING_ROOT / "climatology" / f"climatology_r{res}_{model}.parquet"
     if not master.exists():
@@ -236,7 +238,7 @@ def write_cron_artifact(res: int, model: str):
     out = P.ensure_dir(PROJECT_ROOT / "web" / "data") / f"climatology_r{res}.parquet"
     df.to_parquet(out, compression="zstd", index=False)
     print(f"[cron-artifact] wrote {out} ({out.stat().st_size / 1e6:.1f} MB, {len(df):,} rows) "
-          f"- compact climatology for the web-repo daily cron")
+          f"- compact climatology, retired cron artifact (kept for reproducibility)")
 
 
 # --------------------------------------------------------------------------- #
@@ -251,7 +253,7 @@ def main():
     ap.add_argument("--verify", action="store_true", help="print the seasonality proof")
     ap.add_argument("--build", action="store_true", help="write the climatology parquet artifact")
     ap.add_argument("--cron-artifact", action="store_true",
-                    help="write the compact web/data climatology parquet for the web-repo daily cron")
+                    help="write the compact web/data climatology parquet (cron RETIRED; kept for reproducibility)")
     args = ap.parse_args()
     if not (args.verify or args.build or args.cron_artifact):   # default: build + verify
         args.verify = args.build = True

@@ -104,13 +104,16 @@
     <aside id="sidebar">
       <!-- 0 - historical simulation date -->
       <section class="card app-card shadow-sm" id="date-card">
-        <h2>Historical data date</h2>
+        <h2>
+          Historical data date
+          <span id="date-required-badge" class="date-required-badge">Wajib</span>
+        </h2>
         <div id="panel-date-archive" class="mode-panel">
           <div class="date-row">
             <input id="date-input" class="form-control" type="date" />
             <button id="date-confirm-btn" class="btn btn-primary primary date-confirm" type="button">Show date</button>
           </div>
-          <p class="hint" id="date-hint"></p>
+          <p class="hint" id="date-hint" aria-live="polite"></p>
         </div>
       </section>
 
