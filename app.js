@@ -26,9 +26,10 @@ const JAKARTA_CENTER = [-6.2, 106.84];
 
 // The 5 hex cells containing an ISPU ground station (r7): the ONLY cells whose value
 // is validated against a measurement. Every other cell is a covariate-driven estimate
-// (see the AOA / honesty boundary), so the optional "blur unvalidated" toggle keeps
-// these 5 sharp and fades the other 285. IDs from aqi_models.masking.station_node_mask
-// (DKI1..DKI5); recompute if the grid/stations change.
+// (see the AOA / honesty boundary). The optional toggle grades the grid into three
+// tiers — these 5, the 175 inside the AOA, and the 110 that are extrapolation — using
+// the in_aoa property the build attaches per cell. IDs from
+// aqi_models.masking.station_node_mask (DKI1..DKI5); recompute if the grid/stations change.
 const STATION_CELLS = new Set([
   "878c10799ffffff", "878c10792ffffff", "878c10703ffffff", "878c107a6ffffff", "878c10612ffffff",
 ]);
@@ -198,13 +199,22 @@ function styleForFeature(feature) {
   const peak = peakForSeries(series);
   const idx = peak ? peak.value : null;
   const fillColor = idx === null ? state.meta.no_data_color : peak.colour || colorFor(idx);
-  if (state.blurUnvalidated && !STATION_CELLS.has(id)) {
-    // Unvalidated (285 cells): fade to a hazy wash + dashed edge so it doesn't read as measured.
+  if (state.blurUnvalidated) {
+    // Three tiers of evidence, not two. Distance from a monitor is NOT the criterion:
+    // 149 cells sit >3 km from any station yet still fall inside the AOA, while 4 cells
+    // within 3 km fall outside it. So key off in_aoa (feature-space applicability), and
+    // fall back to the old station/non-station split on grids built before it existed.
+    if (STATION_CELLS.has(id)) {
+      // Measured: the only cells with ground truth. Crisp + bold edge.
+      return { fillColor, fillOpacity: 0.8, color: "#111", weight: 2 };
+    }
+    if (feature.properties.in_aoa === true) {
+      // Inside the AOA (175 cells): the model is interpolating, not guessing past its
+      // training range. Legible, but plainly softer than a measured cell.
+      return { fillColor, fillOpacity: 0.45, color: "#8d97a3", weight: 0.5 };
+    }
+    // Extrapolation (110 cells), or an older grid with no in_aoa: hazy + dashed.
     return { fillColor, fillOpacity: 0.1, color: "#c3ccd6", weight: 0.2, dashArray: "2 3" };
-  }
-  if (state.blurUnvalidated && STATION_CELLS.has(id)) {
-    // Validated (5 station cells): keep crisp + a bold border so they stand out.
-    return { fillColor, fillOpacity: 0.8, color: "#111", weight: 2 };
   }
   return { fillColor, fillOpacity: 0.4, color: "#5b6573", weight: 0.3 };
 }

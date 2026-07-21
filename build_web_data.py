@@ -163,6 +163,39 @@ def _round_coords(obj, ndigits: int):
     return obj
 
 
+def merge_aoa(gdf, res: int):
+    """Attach the per-cell applicability flag (AOA, Meyer & Pebesma 2021) to the grid.
+
+    The map fades cells by how far they sit from validated ground: station cells,
+    cells inside the feature-space AOA, and extrapolation. Without this the page can
+    only tell the 5 station cells from the other 285, which overstates how much of the
+    grid is unsupported — 62% of r7 cells are in fact inside the AOA.
+
+    Optional on purpose: if the artifact is absent the build still succeeds and the
+    frontend falls back to the two-tier station/non-station split.
+    """
+    cands = [
+        PROJECT_ROOT / "scratch_buffer" / f"aoa_f68_r{res}.parquet",
+        Path(paths.WORKING_ROOT) / "model_eval" / f"aoa_f68_r{res}.parquet",
+    ]
+    src = next((p for p in cands if p.exists()), None)
+    if src is None:
+        print(f"[build] AOA r{res}: not found, skipping (map falls back to 2 tiers)")
+        return gdf
+    import pandas as pd  # local: only this path needs it
+
+    aoa = pd.read_parquet(src)[["h3_id", "in_aoa_thesis", "dist_km"]]
+    gdf = gdf.merge(aoa, on="h3_id", how="left")
+    missing = int(gdf["in_aoa_thesis"].isna().sum())
+    # A cell with no AOA row counts as extrapolation — the conservative reading.
+    gdf["in_aoa"] = gdf["in_aoa_thesis"].fillna(False).astype(bool)
+    gdf["dist_km"] = gdf["dist_km"].round(2)
+    gdf = gdf.drop(columns=["in_aoa_thesis"])
+    note = f", {missing} unmatched -> outside" if missing else ""
+    print(f"[build] AOA r{res}: {int(gdf['in_aoa'].sum())}/{len(gdf)} inside ({src.name}{note})")
+    return gdf
+
+
 def write_geojson(gdf, res: int) -> int:
     geojson = json.loads(gdf.to_json(drop_id=True))
     for feat in geojson["features"]:
@@ -231,6 +264,7 @@ def main() -> None:
     gdf = gdf[keep].copy()
     print(f"[build] r{res}: {len(gdf)} grid cells, cols={keep}")
 
+    gdf = merge_aoa(gdf, res)
     n_geo = write_geojson(gdf, res)
     grid_ids = set(gdf["h3_id"])
 
