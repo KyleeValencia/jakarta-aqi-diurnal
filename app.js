@@ -210,11 +210,16 @@ function styleForFeature(feature) {
     }
     if (feature.properties.in_aoa === true) {
       // Inside the AOA (175 cells): the model is interpolating, not guessing past its
-      // training range. Legible, but plainly softer than a measured cell.
-      return { fillColor, fillOpacity: 0.45, color: "#8d97a3", weight: 0.5 };
+      // training range. Keeps the category colour — the value is worth reading.
+      return { fillColor, fillOpacity: 0.55, color: "#7d8794", weight: 0.4 };
     }
-    // Extrapolation (110 cells), or an older grid with no in_aoa: hazy + dashed.
-    return { fillColor, fillOpacity: 0.1, color: "#c3ccd6", weight: 0.2, dashArray: "2 3" };
+    // Extrapolation (110 cells), or an older grid with no in_aoa: DROP the category
+    // colour entirely. Encoding this tier by opacity alone did not work — the fill
+    // already carries the AQI category, so a faded green cell and a mid-strength blue
+    // one looked alike and the tier signal was lost. Neutral grey makes it a difference
+    // in KIND, readable at a glance, and is the honest render: a cell with no support
+    // should not be painted a confident category colour.
+    return { fillColor: "#aab2bb", fillOpacity: 0.28, color: "#6b7480", weight: 0.8, dashArray: "3 3" };
   }
   return { fillColor, fillOpacity: 0.4, color: "#5b6573", weight: 0.3 };
 }
