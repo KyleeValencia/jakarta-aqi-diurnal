@@ -79,6 +79,22 @@ body {
   position: relative;
 }
 #map { flex: 1; min-width: 0; }
+.basemap-status {
+  position: absolute;
+  top: 12px;
+  left: 56px;
+  z-index: 640;
+  max-width: calc(100% - 440px);
+  padding: 8px 11px;
+  border: 1px solid #e2b65f;
+  border-radius: 8px;
+  background: #fff7df;
+  color: #704d08;
+  box-shadow: 0 2px 8px rgba(29, 39, 51, 0.16);
+  font-size: 12.5px;
+  line-height: 1.35;
+  pointer-events: none;
+}
 
 #sidebar {
   width: 360px;
@@ -674,6 +690,11 @@ button.primary:hover { filter: brightness(1.05); }
   body { height: auto; min-height: 100vh; }
   #layout { flex-direction: column; }
   #map { height: 48vh; flex: none; }
+  .basemap-status {
+    top: 12px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+  }
   .landing-hero {
     align-items: flex-start;
     padding: 18px;

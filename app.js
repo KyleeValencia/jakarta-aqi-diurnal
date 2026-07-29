@@ -53,6 +53,9 @@ const state = {
   climatologyCache: new Map(), // date -> climatology overlay object, or null if known-missing
   simulationMode: "raw", // "raw" | "blend_climatology"
   blurUnvalidated: false, // ON => fade the 285 unvalidated cells, keep the 5 station cells sharp
+  dateLoadRequestId: 0,
+  dateLoadController: null,
+  basemapLayer: null,
 };
 
 // Fallback if meta.json predates the archive feature; meta.archive (when present) wins.
@@ -175,12 +178,28 @@ function peakForSeries(series) {
 // ---------------------------------------------------------------------------
 // Map
 // ---------------------------------------------------------------------------
+function setBasemapUnavailable(unavailable) {
+  const status = document.getElementById("basemap-status");
+  if (status) status.classList.toggle("hidden", !unavailable);
+}
+
 function initMap() {
   const map = L.map("map").setView(JAKARTA_CENTER, 11);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  const basemap = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
     attribution: "&copy; OpenStreetMap contributors",
-  }).addTo(map);
+  });
+  let basemapErrorTimer = null;
+  basemap.on("tileerror", () => {
+    window.clearTimeout(basemapErrorTimer);
+    basemapErrorTimer = window.setTimeout(() => setBasemapUnavailable(true), 200);
+  });
+  basemap.on("tileload", () => {
+    window.clearTimeout(basemapErrorTimer);
+    setBasemapUnavailable(false);
+  });
+  basemap.addTo(map);
+  state.basemapLayer = basemap;
   state.map = map;
   // "Lat/lon" mode: click anywhere to resolve the containing cell.
   map.on("click", (e) => {
@@ -518,7 +537,9 @@ function renderSimulationControls() {
   rawBtn.classList.toggle("active", state.simulationMode === "raw");
   blendBtn.classList.toggle("active", state.simulationMode === "blend_climatology");
   const active = modeInfo(state.simulationMode);
-  document.getElementById("simulation-note").textContent = active.description || "";
+  const note = document.getElementById("simulation-note");
+  note.textContent = active.description || "";
+  note.classList.remove("warn");
 }
 
 function setMode(mode) {
@@ -603,38 +624,68 @@ function normalizeArchiveForecast(raw, dateStr) {
   return { model_status: "historical", anchor_date: dateStr, slot_hours, horizons_h, cells };
 }
 
-async function loadArchiveDate(dateStr) {
+async function loadArchiveDate(dateStr, signal) {
   const cache = state.archiveCache;
   if (cache.has(dateStr)) return cache.get(dateStr); // a forecast object, or null = known-missing
   try {
-    const res = await fetch(archivePath(dateStr));
-    if (!res.ok) { cache.set(dateStr, null); return null; }
+    const res = await fetch(archivePath(dateStr), { signal });
+    if (!res.ok) {
+      if (res.status === 404) cache.set(dateStr, null);
+      return null;
+    }
     const raw = await res.json();
     const data = normalizeArchiveForecast(raw, dateStr);
     cache.set(dateStr, data);
     return data;
   } catch (e) {
-    cache.set(dateStr, null);
+    if (e && e.name === "AbortError") throw e;
     return null;
   }
 }
 
-async function loadClimatologyDate(dateStr) {
+async function loadClimatologyDate(dateStr, signal) {
   if (!dateStr) return null;
   const cache = state.climatologyCache;
   if (cache.has(dateStr)) return cache.get(dateStr);
   const path = climatologyPath(dateStr);
   if (!path) return null;
   try {
-    const res = await fetch(path);
+    const res = await fetch(path, { signal });
     if (!res.ok) return null;
     const raw = await res.json();
     const data = raw && raw.cells ? raw.cells : raw;
     cache.set(dateStr, data);
     return data;
   } catch (e) {
+    if (e && e.name === "AbortError") throw e;
     return null;
   }
+}
+
+function resetForecastState() {
+  state.forecast = null;
+  state.archiveDate = null;
+  state.climatology = null;
+  state.currentSlot = null;
+
+  if (state.chart) {
+    state.chart.destroy();
+    state.chart = null;
+  }
+
+  show("result-card", false);
+  show("aqi-readout", false);
+  show("forecast-section", false);
+  show("peak-summary", false);
+  show("aqi-pending", false);
+  document.getElementById("result-meta").textContent = "";
+  document.getElementById("peak-summary").textContent = "";
+  document.getElementById("step-badges").textContent = "";
+
+  if (state.geoLayer) state.geoLayer.setStyle(styleForFeature);
+  state.selectedLayer = null;
+  renderSimulationControls();
+  renderBanner();
 }
 
 // Re-derive everything that depends on "which forecast is loaded": the clock slot,
@@ -649,36 +700,66 @@ function refreshAfterForecastChange() {
 
 async function onArchiveDateChange(dateStr) {
   const hint = document.getElementById("date-hint");
+  const requestId = ++state.dateLoadRequestId;
+  if (state.dateLoadController) state.dateLoadController.abort();
+  const controller = new AbortController();
+  state.dateLoadController = controller;
+
+  resetForecastState();
+  syncHistoricalDateGate();
   hint.classList.remove("warn");
   hint.textContent = "Loading…";
-  const data = await loadArchiveDate(dateStr);
-  if (!data) {
-    hint.textContent = `No simulation saved for ${dateStr} — try a nearby date.`;
-    hint.classList.add("warn");
-    return; // keep showing whatever was loaded before (don't blank the map on a miss)
-  }
-  state.forecast = data;
-  state.archiveDate = dateStr;
-  let statusText = `Showing the historical simulation for ${dateStr}.`;
-  let statusWarn = false;
-  if (state.simulationMode === "blend_climatology") {
-    const clim = await loadClimatologyDate(dateStr);
-    if (!clim) {
-      state.simulationMode = "raw";
-      state.climatology = null;
-      statusText = `Showing ${dateStr}; climatology overlay missing, so simulation without climatology is used.`;
-      statusWarn = true;
-    } else {
-      state.climatology = clim;
+
+  try {
+    const data = await loadArchiveDate(dateStr, controller.signal);
+    if (requestId !== state.dateLoadRequestId || controller.signal.aborted) return false;
+
+    if (!data) {
+      resetForecastState();
+      syncHistoricalDateGate();
+      hint.textContent = `No simulation saved for ${dateStr} — try a nearby date.`;
+      hint.classList.add("warn");
+      return false;
     }
-  } else {
-    state.climatology = null;
+
+    let nextMode = state.simulationMode;
+    let nextClimatology = null;
+    let statusText = `Showing the historical simulation for ${dateStr}.`;
+    let statusWarn = false;
+    if (nextMode === "blend_climatology") {
+      const clim = await loadClimatologyDate(dateStr, controller.signal);
+      if (requestId !== state.dateLoadRequestId || controller.signal.aborted) return false;
+      if (!clim) {
+        nextMode = "raw";
+        statusText = `Showing ${dateStr}; climatology overlay missing, so simulation without climatology is used.`;
+        statusWarn = true;
+      } else {
+        nextClimatology = clim;
+      }
+    }
+
+    state.forecast = data;
+    state.archiveDate = dateStr;
+    state.simulationMode = nextMode;
+    state.climatology = nextClimatology;
+    hint.textContent = statusText;
+    hint.classList.toggle("warn", statusWarn);
+    renderAbout();
+    refreshAfterForecastChange();
+    syncHistoricalDateGate();
+    return true;
+  } catch (e) {
+    if (e && e.name === "AbortError") return false;
+    if (requestId === state.dateLoadRequestId) {
+      resetForecastState();
+      syncHistoricalDateGate();
+      hint.textContent = `Could not load the simulation for ${dateStr}. Please try again.`;
+      hint.classList.add("warn");
+    }
+    return false;
+  } finally {
+    if (requestId === state.dateLoadRequestId) state.dateLoadController = null;
   }
-  hint.textContent = statusText;
-  hint.classList.toggle("warn", statusWarn);
-  renderAbout();
-  refreshAfterForecastChange();
-  syncHistoricalDateGate();
 }
 
 function confirmArchiveDate() {
@@ -861,9 +942,15 @@ function wireControls() {
 async function setSimulationMode(mode) {
   if (mode === state.simulationMode) return;
   if (mode === "blend_climatology" && state.archiveDate) {
-    const clim = await loadClimatologyDate(state.archiveDate);
+    const dateStr = state.archiveDate;
+    const requestId = state.dateLoadRequestId;
+    const clim = await loadClimatologyDate(dateStr);
+    if (dateStr !== state.archiveDate || requestId !== state.dateLoadRequestId) return;
     if (!clim) {
-      alert("Climatology overlay is not available for this date.");
+      state.climatology = null;
+      const note = document.getElementById("simulation-note");
+      note.textContent = "Climatology overlay is not available for this date. The model-only simulation remains active.";
+      note.classList.add("warn");
       return;
     }
     state.climatology = clim;
@@ -871,6 +958,7 @@ async function setSimulationMode(mode) {
   if (mode === "raw") state.climatology = null;
   state.simulationMode = mode;
   renderSimulationControls();
+  document.getElementById("simulation-note").classList.remove("warn");
   renderLandingDashboard();
   refreshAfterForecastChange();
 }

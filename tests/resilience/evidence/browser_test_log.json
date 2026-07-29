@@ -1,0 +1,185 @@
+{
+  "session": "Sesi A - Web Resilience",
+  "tested_at": "2026-07-29T23:27:03+07:00",
+  "repository": "C:\\Users\\Lenovo\\Desktop\\jakarta-aqi-diurnal-upload",
+  "baseline_commit": "51b12221f5494c5eec4aa51d8796d80cdb6dfb61",
+  "browser": "Chromium-based automated browser",
+  "server": "tests/resilience/fault_server.py",
+  "summary": {
+    "required_scenarios": 8,
+    "passed": 8,
+    "failed": 0
+  },
+  "tests": [
+    {
+      "id": 1,
+      "name": "Normal landing to map, result, and chart",
+      "status": "PASS",
+      "observed": {
+        "date": "2024-02-02",
+        "polygon_count": 290,
+        "aqi": "63",
+        "category": "SEDANG - Moderate",
+        "chart_points": 6,
+        "result_visible": true,
+        "chart_visible": true,
+        "leaflet_marker": "vendor/leaflet-1.9.4/images/marker-icon-2x.png"
+      },
+      "screenshot": "01_normal_flow.png"
+    },
+    {
+      "id": 2,
+      "name": "Valid date to missing date to another valid date",
+      "status": "PASS",
+      "observed": {
+        "missing_date": "2024-02-01",
+        "missing_message": "No simulation saved for 2024-02-01 - try a nearby date.",
+        "forecast_hidden_after_failure": true,
+        "result_hidden_after_failure": true,
+        "date_controls_locked_after_failure": true,
+        "neutral_polygon_fill": "#cdd6e0",
+        "preserved_date_input": "2024-02-01",
+        "preserved_latitude": "-6.1751",
+        "preserved_longitude": "106.8650",
+        "recovered_date": "2024-02-03",
+        "recovered_aqi": "49",
+        "recovered_result_visible": true,
+        "recovered_chart_visible": true
+      },
+      "screenshot": "02_valid_to_missing_reset.png"
+    },
+    {
+      "id": 3,
+      "name": "Missing date as the first date action",
+      "status": "PASS",
+      "observed": {
+        "date": "2024-02-01",
+        "missing_message": "No simulation saved for 2024-02-01 - try a nearby date.",
+        "forecast_hidden": true,
+        "result_hidden": true,
+        "date_controls_locked": true,
+        "polygon_count": 290
+      },
+      "screenshot": "03_missing_first_action.png"
+    },
+    {
+      "id": 4,
+      "name": "Two dates clicked quickly with reversed response order",
+      "status": "PASS",
+      "injection": {
+        "2024-02-03_delay_seconds": 1.0,
+        "2024-02-04_delay_seconds": 0.1,
+        "server_completion_order": [
+          "2024-02-04",
+          "2024-02-03"
+        ],
+        "older_request_connection_aborted": true
+      },
+      "observed": {
+        "final_date": "2024-02-04",
+        "final_message": "Showing the historical simulation for 2024-02-04.",
+        "final_aqi": "51",
+        "result_visible": true
+      },
+      "screenshot": "05_reverse_response_race.png"
+    },
+    {
+      "id": 5,
+      "name": "Climatology unavailable",
+      "status": "PASS",
+      "injection": "HTTP 404 for data/climatology_r7_2024-02-04.json",
+      "observed": {
+        "inline_message": "Climatology overlay is not available for this date. The model-only simulation remains active.",
+        "raw_mode_active": true,
+        "blend_mode_active": false,
+        "result_visible": true,
+        "aqi": "51"
+      },
+      "screenshot": "06_climatology_missing.png"
+    },
+    {
+      "id": 6,
+      "name": "jsDelivr and unpkg blocked",
+      "status": "PASS",
+      "injection": "CSP default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+      "observed": {
+        "runtime_jsdelivr_or_unpkg_references": 0,
+        "local_runtime_assets": [
+          "vendor/bootstrap-5.3.3/css/bootstrap.min.css",
+          "vendor/leaflet-1.9.4/leaflet.css",
+          "vendor/leaflet-1.9.4/leaflet.js",
+          "vendor/chart.js-4.4.1/chart.umd.js",
+          "vendor/h3-js-4.1.0/h3-js.umd.js",
+          "vendor/bootstrap-5.3.3/js/bootstrap.bundle.min.js"
+        ],
+        "application_initialized": true,
+        "polygon_count": 290,
+        "aqi": "63",
+        "chart_points": 6
+      },
+      "screenshot": "04_cdn_and_osm_blocked.png"
+    },
+    {
+      "id": 7,
+      "name": "OpenStreetMap tiles blocked",
+      "status": "PASS",
+      "injection": "CSP img-src 'self' data:",
+      "observed": {
+        "degraded_message_visible": true,
+        "degraded_message": "Basemap unavailable. AQI hexagons, values, and charts are still available.",
+        "polygon_count": 290,
+        "result_visible": true,
+        "chart_visible": true,
+        "aqi": "63",
+        "chart_points": 6
+      },
+      "screenshot": "04_cdn_and_osm_blocked.png"
+    },
+    {
+      "id": 8,
+      "name": "No console warnings or errors in the normal flow",
+      "status": "PASS",
+      "observed": {
+        "warning_count": 0,
+        "error_count": 0,
+        "entries": []
+      }
+    }
+  ],
+  "static_checks": {
+    "node_syntax_check": "PASS",
+    "python_unittest_count": 4,
+    "python_unittest_result": "PASS",
+    "assertions": [
+      "No CDN references in index.html",
+      "Six local vendor runtime references resolve",
+      "All Leaflet CSS and default-marker images exist",
+      "Vendor versions and licenses are recorded",
+      "Date reset and race guards are present"
+    ]
+  },
+  "server_evidence": {
+    "normal_local_requests": [
+      "GET /vendor/bootstrap-5.3.3/css/bootstrap.min.css 200",
+      "GET /vendor/leaflet-1.9.4/leaflet.css 200",
+      "GET /vendor/leaflet-1.9.4/leaflet.js 200",
+      "GET /vendor/chart.js-4.4.1/chart.umd.js 200",
+      "GET /vendor/h3-js-4.1.0/h3-js.umd.js 200",
+      "GET /vendor/bootstrap-5.3.3/js/bootstrap.bundle.min.js 200",
+      "GET /vendor/leaflet-1.9.4/images/marker-icon.png 200",
+      "GET /vendor/leaflet-1.9.4/images/marker-icon-2x.png 200",
+      "GET /vendor/leaflet-1.9.4/images/marker-shadow.png 200"
+    ],
+    "missing_forecast": "GET /data/forecast_r7_2024-02-01.json 404",
+    "race_completion_order": [
+      "GET /data/forecast_r7_2024-02-04.json 200",
+      "GET /data/forecast_r7_2024-02-03.json 200"
+    ],
+    "missing_climatology": "GET /data/climatology_r7_2024-02-04.json 404"
+  },
+  "production_baseline": {
+    "url": "https://simulation-aqi-jakarta-diurnal.vercel.app/",
+    "note": "Read-only fingerprint only. The production site still references the four CDN libraries because deployment was explicitly out of scope.",
+    "repository_url": "https://github.com/KyleeValencia/jakarta-aqi-diurnal"
+  }
+}
