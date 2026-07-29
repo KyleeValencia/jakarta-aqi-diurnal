@@ -1,4 +1,4 @@
-# Jakarta AQI — website
+# Jakarta AQI estimation website
 
 A **static, single-page** website for the Jakarta morning-AQI forecast. No backend: a Python
 script pre-computes static data files, and a plain HTML/JS/Leaflet page renders them. It is driven
@@ -12,13 +12,16 @@ drop in with no front-end change.
 
 ## What it shows (the three product features)
 
-1. **Choose a location** — *My location* (browser geolocation), *Lat / lon* (type coordinates), or
+1. **Choose a location**
+   *My location* (browser geolocation), *Lat / lon* (type coordinates), or
    click anywhere on the map.
-2. **Predicted AQI for that grid cell** — the coordinate is resolved to its H3 **r7** hex cell
-   (`h3.latLngToCell`, v4 API — identical to Python `aqi_utils.h3_grid.latlng_to_cell`), and that
+3. **Predicted AQI for that grid cell**
+   the coordinate is resolved to its H3 **r7** hex cell
+   (`h3.latLngToCell`, v4 API: identical to Python `aqi_utils.h3_grid.latlng_to_cell`), and that
    cell's value + ISPU category are shown on the official KLHK colour scale. *(Shows "awaiting
    model output" while in preview mode.)*
-3. **Forecast graph** — a weather-style line chart over the locked 3-hour morning steps: **now,
+5. **Forecast graph**
+   a weather-style line chart over the locked 3-hour morning steps: **now,
    +3h, +6h**, each point labelled with its ISPU category. *(Appears once forecasts are published.)*
 
 An **About** overlay states the methodology and the honest accuracy limitations.
@@ -36,7 +39,8 @@ python web/build_web_data.py --mode live
 ```
 
 `--mode live` reads NB8's canonical `web_data/forecast_r{R}.json` and re-emits it in the front-end
-contract — **no front-end change needed**. Resolution defaults to r7 (`--resolution`).
+contract.
+**no front-end change needed**. Resolution defaults to r7 (`--resolution`).
 
 ## Run locally
 
@@ -76,10 +80,13 @@ a current+next-3 window. The `model_status` field drives the preview-vs-live UI.
 
 ## Honest limitations (shown in the About panel)
 
-- **Full diurnal cycle** — the model anchors at every fixed clock slot (selectable 2/3/4-h step,
+- **Full diurnal cycle**
+    the model anchors at every fixed clock slot (selectable 2/3/4-h step,
   default 4 h) and shows the current value + next 3; the within-day shape is CAMS-derived and
   ISPU-calibrated at the daily peak (not hourly-validatable).
-- **Per-cell accuracy is not independently validatable** — ground truth is only 5 DKI stations, so
+- **Per-cell accuracy is not independently validatable**
+    ground truth is only 5 DKI stations, so
   off-station per-cell differences are an *informed display gradient*, not a measured value.
-- **Static demonstrator** — serving a *live, on-demand* model is a separate, possibly-paid stage (a
+- **Static demonstrator**
+    serving a *live, on-demand* model is a separate, possibly-paid stage (a
   Python backend host), deliberately deferred. See `docs/PROJECT_STATUS.md` §10.
