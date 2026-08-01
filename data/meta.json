@@ -76,10 +76,10 @@
   ],
   "no_data_color": "#BFBFBF",
   "disclaimers": [
-    "The shown values are historical model simulations for the selected date, not live measurements.",
-    "Simulated values are per H3 hex cell on the mainland-DKI grid and are displayed as a full diurnal pattern in fixed clock slots.",
-    "The within-day shape is CAMS-derived and ISPU-calibrated at the daily peak; there is no hourly ground truth, so the sub-daily curve cannot be independently validated.",
-    "Ground truth is only 5 DKI monitoring stations, so OFF-station (per-cell) accuracy is NOT independently validatable - per-cell differences are an informed display gradient, not a measured value. A real deployment must state this."
+    "Nilai yang ditampilkan adalah simulasi model untuk tanggal historis yang dipilih, bukan pengukuran langsung.",
+    "Nilai simulasi dihitung per sel hex H3 pada grid daratan DKI dan ditampilkan sebagai pola harian penuh pada slot jam tetap.",
+    "Bentuk kurva dalam satu hari berasal dari CAMS dan dikalibrasi ke ISPU pada puncak harian. Tidak ada data lapangan per jam, sehingga kurva sub-harian tidak bisa dicek secara terpisah.",
+    "Data lapangan hanya berasal dari 5 stasiun pemantau DKI, sehingga akurasi di luar stasiun (per sel) TIDAK bisa dicek secara terpisah. Perbedaan antar sel adalah gradasi tampilan berbasis model, bukan nilai hasil pengukuran. Penerapan nyata wajib menyatakan hal ini."
   ],
   "climatology_file_pattern": "climatology_r7_{date}.json",
   "simulation_modes": [

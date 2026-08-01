@@ -325,11 +325,11 @@ function selectByCell(h3id, lat, lng) {
 
   const coordTxt = lat != null ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : "";
   const dateTxt = state.archiveDate
-    ? `<br>Historical date: ${state.archiveDate}`
+    ? `<br>Tanggal historis: ${state.archiveDate}`
     : "";
   document.getElementById("result-meta").innerHTML =
-    `Cell <code>${h3id}</code>${coordTxt ? "<br>" + coordTxt : ""}${dateTxt}` +
-    (onGrid ? "" : `<br><span class="warn">Outside the Jakarta study grid.</span>`);
+    `Sel <code>${h3id}</code>${coordTxt ? "<br>" + coordTxt : ""}${dateTxt}` +
+    (onGrid ? "" : `<br><span class="warn">Di luar grid wilayah studi Jakarta.</span>`);
 
   // --- PENDING (coming-soon) state ---
   if (isPending()) {
@@ -338,8 +338,8 @@ function selectByCell(h3id, lat, lng) {
     show("peak-summary", false);
     show("aqi-pending", true);
     document.getElementById("pending-text").textContent = onGrid
-      ? "Choose a historical date and press Show date to load the simulation for this cell."
-      : "This location is outside the Jakarta mainland study grid, so it has no simulated AQI.";
+      ? "Pilih tanggal historis lalu tekan Tampilkan tanggal untuk memuat simulasi sel ini."
+      : "Lokasi ini di luar grid wilayah studi daratan Jakarta, jadi tidak punya AQI hasil simulasi.";
     if (state.chart) { state.chart.destroy(); state.chart = null; }
     return;
   }
@@ -353,7 +353,7 @@ function selectByCell(h3id, lat, lng) {
     show("peak-summary", false);
     document.getElementById("aqi-value").textContent = "—";
     const badge = document.getElementById("aqi-badge");
-    badge.textContent = "Outside coverage";
+    badge.textContent = "Di luar cakupan";
     badge.style.background = state.meta.no_data_color;
     if (state.chart) { state.chart.destroy(); state.chart = null; }
     return;
@@ -365,7 +365,7 @@ function selectByCell(h3id, lat, lng) {
   const e = legendEntryFor(peak.value);
   document.getElementById("aqi-value").textContent = Math.round(peak.value);
   const badge = document.getElementById("aqi-badge");
-  badge.textContent = `${peak.category || e.category} · ${e.english}`;
+  badge.textContent = `${peak.category || e.category}`;
   badge.style.background = peak.colour || e.color;
   renderPeakSummary(peak);
   renderChart(series);
@@ -375,7 +375,7 @@ function selectByCell(h3id, lat, lng) {
 // ---------------------------------------------------------------------------
 // Forecast chart + step badges
 // ---------------------------------------------------------------------------
-const stepLabel = (offsetH) => (offsetH === 0 ? "Now" : `+${offsetH}h`);
+const stepLabel = (offsetH) => (offsetH === 0 ? "Sekarang" : `+${offsetH}j`);
 
 // WIB clock time of a forecast point. Slots are whole WIB clock hours and offsets
 // are whole hours, so the wall-clock is just (slot + offset) mod 24 -- computed in
@@ -400,8 +400,8 @@ function renderPeakSummary(peak) {
   const e = legendEntryFor(peak.value);
   const clk = pointClock(peak);
   el.innerHTML =
-    `<strong>Peak AQI</strong> <span class="peak-time">${clk} WIB</span>` +
-    ` &middot; ${Math.round(peak.value)} &middot; ${peak.category || e.category} (${e.english})`;
+    `<strong>AQI puncak</strong> <span class="peak-time">${clk} WIB</span>` +
+    ` &middot; ${Math.round(peak.value)} &middot; ${peak.category || e.category}`;
 }
 
 function renderChart(series) {
@@ -410,7 +410,7 @@ function renderChart(series) {
     ? (series[1].clock_h - series[0].clock_h + 24) % 24
     : (series.length > 1 ? series[1].offset_h - series[0].offset_h : 0);
   const titleEl = document.getElementById("chart-title");
-  if (titleEl) titleEl.textContent = step ? `Historical diurnal pattern · ${step}-hour slots` : "Historical pattern";
+  if (titleEl) titleEl.textContent = step ? `Pola harian historis · slot ${step} jam` : "Pola historis";
 
   const labels = series.map((s) => {
     const clk = pointClock(s);
@@ -446,7 +446,7 @@ function renderChart(series) {
           callbacks: {
             label: (item) => {
               const e = legendEntryFor(item.parsed.y);
-              return `AQI ${Math.round(item.parsed.y)} — ${e.category} (${e.english})`;
+              return `AQI ${Math.round(item.parsed.y)} — ${e.category}`;
             },
           },
         },
@@ -495,7 +495,7 @@ function renderLegend() {
     const range = e.upper === null ? `${lower}+` : `${lower}–${e.upper}`;
     li.innerHTML =
       `<span class="swatch" style="background:${e.color}"></span>` +
-      `<span class="legend-label"><span class="legend-id">${e.category}</span><span class="legend-en">${e.english}</span></span>` +
+      `<span class="legend-label"><span class="legend-id">${e.category}</span></span>` +
       `<span class="range">${range}</span>`;
     ul.appendChild(li);
     lower = (e.upper ?? lower) + 1;
@@ -510,13 +510,13 @@ function renderBanner() {
   }
   if (isPending()) {
     b.className = "banner banner-pending";
-    b.innerHTML = `<strong>SELECT DATE</strong> &mdash; choose a historical date, then press Show date to load the simulation`;
+    b.innerHTML = `<strong>PILIH TANGGAL</strong> &mdash; pilih tanggal historis, lalu tekan Tampilkan tanggal untuk memuat simulasinya`;
   } else {
     b.className = "banner banner-sim";
     b.innerHTML =
-      `<strong>HISTORICAL SIMULATION</strong> &middot; modeled diurnal pattern for ${state.archiveDate || "selected date"} ` +
+      `<strong>SIMULASI HISTORIS</strong> &middot; pola harian hasil model untuk ${state.archiveDate || "tanggal terpilih"} ` +
       `&middot; ${modeInfo(state.simulationMode).label} ` +
-      `&middot; not a live measurement`;
+      `&middot; bukan pengukuran langsung`;
   }
 }
 
@@ -590,8 +590,8 @@ function syncHistoricalDateGate() {
     const arc = archiveConfig();
     const hint = document.getElementById("date-hint");
     hint.textContent =
-      `Choose and load a historical date (${arc.start_date} to ${arc.end_date}) ` +
-      `to enable the controls below.`;
+      `Pilih dan muat tanggal historis (${arc.start_date} sampai ${arc.end_date}) ` +
+      `untuk mengaktifkan kontrol di bawah.`;
     hint.classList.add("warn");
   }
 }
@@ -708,7 +708,7 @@ async function onArchiveDateChange(dateStr) {
   resetForecastState();
   syncHistoricalDateGate();
   hint.classList.remove("warn");
-  hint.textContent = "Loading…";
+  hint.textContent = "Memuat…";
 
   try {
     const data = await loadArchiveDate(dateStr, controller.signal);
@@ -717,21 +717,21 @@ async function onArchiveDateChange(dateStr) {
     if (!data) {
       resetForecastState();
       syncHistoricalDateGate();
-      hint.textContent = `No simulation saved for ${dateStr} — try a nearby date.`;
+      hint.textContent = `Tidak ada simulasi untuk ${dateStr}. Coba tanggal terdekat lainnya`;
       hint.classList.add("warn");
       return false;
     }
 
     let nextMode = state.simulationMode;
     let nextClimatology = null;
-    let statusText = `Showing the historical simulation for ${dateStr}.`;
+    let statusText = `Menampilkan simulasi historis untuk ${dateStr}.`;
     let statusWarn = false;
     if (nextMode === "blend_climatology") {
       const clim = await loadClimatologyDate(dateStr, controller.signal);
       if (requestId !== state.dateLoadRequestId || controller.signal.aborted) return false;
       if (!clim) {
         nextMode = "raw";
-        statusText = `Showing ${dateStr}; climatology overlay missing, so simulation without climatology is used.`;
+        statusText = `Menampilkan ${dateStr}. Lapisan klimatologi tidak ada, jadi yang dipakai simulasi tanpa klimatologi.`;
         statusWarn = true;
       } else {
         nextClimatology = clim;
@@ -753,7 +753,7 @@ async function onArchiveDateChange(dateStr) {
     if (requestId === state.dateLoadRequestId) {
       resetForecastState();
       syncHistoricalDateGate();
-      hint.textContent = `Could not load the simulation for ${dateStr}. Please try again.`;
+      hint.textContent = `Gagal memuat simulasi untuk ${dateStr}. Coba lagi.`;
       hint.classList.add("warn");
     }
     return false;
@@ -766,7 +766,7 @@ function confirmArchiveDate() {
   const input = document.getElementById("date-input");
   const hint = document.getElementById("date-hint");
   if (!input.value) {
-    hint.textContent = "Choose a date first.";
+    hint.textContent = "Pilih tanggal dulu.";
     hint.classList.add("warn");
     return;
   }
@@ -811,8 +811,8 @@ function renderLandingDashboard() {
   if (!state.meta) return;
   const arc = archiveConfig();
   const slotText = activeSlotHours().map((h) => pad2(h)).join(", ");
-  document.getElementById("landing-archive-range").textContent = `${arc.start_date} to ${arc.end_date}`;
-  document.getElementById("landing-cell-count").textContent = `${state.meta.n_cells} H3 cells`;
+  document.getElementById("landing-archive-range").textContent = `${arc.start_date} sampai ${arc.end_date}`;
+  document.getElementById("landing-cell-count").textContent = `${state.meta.n_cells} sel H3`;
   document.getElementById("landing-slot-list").textContent = `${slotText} WIB`;
   document.getElementById("landing-mode-label").textContent = modeInfo(state.simulationMode).label;
 
@@ -820,7 +820,7 @@ function renderLandingDashboard() {
   strip.innerHTML = "";
   state.meta.legend.forEach((entry) => {
     const segment = document.createElement("span");
-    segment.title = `${entry.category} (${entry.english})`;
+    segment.title = `${entry.category}`;
     segment.style.background = entry.color;
     strip.appendChild(segment);
   });
@@ -860,12 +860,12 @@ function wireControls() {
     syncHistoricalDateGate();
     if (!e.target.value) return;
     if (hasLoadedSelectedDate()) {
-      hint.textContent = `Showing the historical simulation for ${e.target.value}.`;
+      hint.textContent = `Menampilkan simulasi historis untuk ${e.target.value}.`;
       hint.classList.remove("warn");
       return;
     }
     hint.textContent =
-      `Selected ${e.target.value}. Press Show date to load it and enable the controls below.`;
+      `Tanggal ${e.target.value} dipilih. Tekan Tampilkan tanggal untuk memuatnya dan mengaktifkan kontrol di bawah.`;
     hint.classList.add("warn");
   });
   document.getElementById("date-input").addEventListener("keydown", (e) => {
@@ -887,13 +887,13 @@ function wireControls() {
 
   locateBtn.addEventListener("click", () => {
     if (!navigator.geolocation) {
-      setLocateHint("Geolocation isn't supported by this browser — use the Lat / lon option.", true);
+      setLocateHint("Browser ini tidak mendukung geolokasi. Pakai pilihan Lat / lon.", true);
       return;
     }
     const original = locateBtn.textContent;
     locateBtn.disabled = true;
-    locateBtn.textContent = "Locating…";
-    setLocateHint("Requesting your location…", false);
+    locateBtn.textContent = "Mencari…";
+    setLocateHint("Meminta izin lokasi kamu…", false);
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -904,19 +904,19 @@ function wireControls() {
         const cell = h3.latLngToCell(lat, lng, state.resolution);
         if (state.h3ToLayer.has(cell)) {
           state.map.setView([lat, lng], Math.max(state.map.getZoom(), 13));
-          setLocateHint("Showing the hex cell at your location.", false);
+          setLocateHint("Menampilkan sel hex di lokasi kamu.", false);
         } else {
           if (state.geoLayer) state.map.fitBounds(state.geoLayer.getBounds());
-          setLocateHint("You're outside the Jakarta study grid — showing the covered area.", true);
+          setLocateHint("Lokasi kamu di luar grid wilayah studi Jakarta. Yang ditampilkan area yang tercakup.", true);
         }
       },
       (err) => {
         locateBtn.disabled = false;
         locateBtn.textContent = original;
-        const reason = { 1: "permission denied", 2: "position unavailable", 3: "request timed out" };
-        let msg = "Couldn't get your location (" + (reason[err.code] || err.message) + ").";
-        if (!window.isSecureContext) msg += " Location needs HTTPS or localhost.";
-        msg += " Try the Lat / lon option.";
+        const reason = { 1: "izin ditolak", 2: "posisi tidak tersedia", 3: "permintaan kehabisan waktu" };
+        let msg = "Lokasi kamu tidak bisa diambil (" + (reason[err.code] || err.message) + ").";
+        if (!window.isSecureContext) msg += " Fitur lokasi butuh HTTPS atau localhost.";
+        msg += " Coba pakai pilihan Lat / lon.";
         setLocateHint(msg, true);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -926,7 +926,7 @@ function wireControls() {
   document.getElementById("go-btn").addEventListener("click", () => {
     const lat = parseFloat(document.getElementById("lat-input").value);
     const lng = parseFloat(document.getElementById("lon-input").value);
-    if (Number.isNaN(lat) || Number.isNaN(lng)) { alert("Enter a valid lat/lon."); return; }
+    if (Number.isNaN(lat) || Number.isNaN(lng)) { alert("Masukkan lat/lon yang valid."); return; }
     state.map.setView([lat, lng], Math.max(state.map.getZoom(), 12));
     selectByLatLng(lat, lng);
   });
@@ -949,7 +949,7 @@ async function setSimulationMode(mode) {
     if (!clim) {
       state.climatology = null;
       const note = document.getElementById("simulation-note");
-      note.textContent = "Climatology overlay is not available for this date. The model-only simulation remains active.";
+      note.textContent = "Lapisan klimatologi tidak tersedia untuk tanggal ini. Yang aktif tetap simulasi model saja.";
       note.classList.add("warn");
       return;
     }
@@ -969,8 +969,8 @@ function setSidebarCollapsed(collapsed) {
   const toggle = document.getElementById("sidebar-toggle");
   layout.classList.toggle("sidebar-collapsed", collapsed);
   toggle.setAttribute("aria-expanded", String(!collapsed));
-  toggle.setAttribute("aria-label", collapsed ? "Expand side panel" : "Collapse side panel");
-  toggle.title = collapsed ? "Expand side panel" : "Collapse side panel";
+  toggle.setAttribute("aria-label", collapsed ? "Buka panel samping" : "Tutup panel samping");
+  toggle.title = collapsed ? "Buka panel samping" : "Tutup panel samping";
   sidebar.setAttribute("aria-hidden", String(collapsed));
   sidebar.inert = collapsed;
   if (collapsed && sidebar.contains(document.activeElement)) toggle.focus();
@@ -1010,7 +1010,7 @@ async function boot() {
   dateInput.max = arc.end_date;
   dateInput.value = "";
   document.getElementById("date-hint").textContent =
-    `Available historical dates: ${arc.start_date} to ${arc.end_date}.`;
+    `Tanggal historis yang tersedia: ${arc.start_date} sampai ${arc.end_date}.`;
 
   initMap();
   addGeoLayer(geojson);
@@ -1027,5 +1027,5 @@ async function boot() {
 
 boot().catch((e) => {
   console.error(e);
-  alert("Failed to load web data. Run `python web/build_web_data.py` first, then serve the folder.");
+  alert("Gagal memuat data situs. Jalankan `python web/build_web_data.py` dulu, lalu layani foldernya.");
 });
