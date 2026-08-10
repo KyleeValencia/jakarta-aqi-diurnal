@@ -799,6 +799,12 @@ function enterApp(options = {}) {
   if (document.getElementById("layout").classList.contains("sidebar-collapsed")) {
     setSidebarCollapsed(false);
   }
+  // Peta di-init dengan lebar 0 di belakang overlay landing; ukur ulang begitu
+  // ia tampil. setSidebarCollapsed hanya memicu invalidateSize saat benar-benar
+  // meng-uncollapse, yang TIDAK terjadi pada masuk-pertama normal. Meniru refresh
+  // toggle sidebar supaya tile/sel mengisi kontainer penuh, bukan strip sempit.
+  requestAnimationFrame(() => state.map && state.map.invalidateSize());
+  window.setTimeout(() => state.map && state.map.invalidateSize(), 260);
   if (options.focusDate !== false) {
     window.setTimeout(() => {
       const dateInput = document.getElementById("date-input");
