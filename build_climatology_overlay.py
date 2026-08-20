@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -27,22 +28,13 @@ import pyarrow.parquet as pq
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
 
-PM25_BREAKPOINTS = [
-    (0.0, 15.5, 0.0, 50.0),
-    (15.6, 55.4, 51.0, 100.0),
-    (55.5, 150.4, 101.0, 200.0),
-    (150.5, 250.4, 201.0, 300.0),
-    (250.5, 500.4, 301.0, 500.0),
-]
+# Portable bootstrap (same rule as build_web_data.py / build_climatology.py):
+# reuse the pipeline's single ISPU conversion (Permen LHK P.14/2020 breakpoints)
+# instead of a local copy, so overlay ISPU matches the model ISPU it is blended with.
+PROJECT_ROOT = HERE.parent
+sys.path.insert(0, str(PROJECT_ROOT / "jakarta-aqi-utils-fix"))
 
-
-def pm25_to_ispu(conc: float | None) -> float | None:
-    if conc is None or conc != conc or conc < 0:
-        return None
-    for x_lo, x_hi, i_lo, i_hi in PM25_BREAKPOINTS:
-        if conc <= x_hi:
-            return (i_hi - i_lo) / (x_hi - x_lo) * (conc - x_lo) + i_lo
-    return PM25_BREAKPOINTS[-1][3]
+from aqi_models.physics import pm25_to_ispu  # noqa: E402
 
 
 def point_value(ugm3: float | None) -> float:
@@ -56,16 +48,29 @@ def point_value(ugm3: float | None) -> float:
 
 def selected_dates(meta: dict, only_date: str | None) -> list[str]:
     dates = meta.get("available_dates") or []
+    if not dates:
+        # Deployed meta moved the date bounds into an `archive` block (no explicit
+        # list). Derive the date set from the raw per-date archive files already on
+        # disk, so every climatology overlay has a matching raw layer.
+        res = int(meta.get("resolution", 7))
+        raw_name = (meta.get("archive") or {}).get(
+            "path_pattern", "data/forecast_r{res}_{date}.json"
+        ).split("/")[-1].replace("{res}", str(res))
+        pre, suf = raw_name.split("{date}")
+        dates = sorted(
+            p.name[len(pre):len(p.name) - len(suf)]
+            for p in DATA.glob(f"{pre}*{suf}")
+        )
     if only_date:
         if only_date not in dates:
-            raise ValueError(f"{only_date} is not in meta.available_dates")
+            raise ValueError(f"{only_date} is not in the available date set")
         return [only_date]
     if not dates:
-        raise ValueError("meta.json has no available_dates")
+        raise ValueError("meta.json has no available_dates and no raw archive files on disk")
     return dates
 
 
-def build_overlay_for_date(rows: dict, offsets: list[int], pred_cols: list[str]) -> dict:
+def build_overlay_for_date(rows: dict, pred_cols: list[str]) -> dict:
     cells: dict[str, dict[str, list[float]]] = {}
     for i, h3id in enumerate(rows["h3_id"]):
         slot = str(int(rows["slot_h"][i]))
@@ -115,7 +120,7 @@ def main() -> None:
             max_doy = int(df["doy"].max())
             day = df[(df["doy"] == min(doy, max_doy)) & (df["wend"] == wend)]
         rows = day[["h3_id", "slot_h", *pred_cols]].to_dict(orient="list")
-        payload = build_overlay_for_date(rows, offsets, pred_cols)
+        payload = build_overlay_for_date(rows, pred_cols)
         out = DATA / overlay_pattern.replace("{date}", date_str)
         out.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
         built += 1

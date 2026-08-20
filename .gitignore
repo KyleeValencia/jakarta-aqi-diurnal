@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 data_climatology/
+# Compact climatology parquet is a local build intermediate for
+# build_climatology_overlay.py; the site serves the per-date JSON, not this.
+*.parquet

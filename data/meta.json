@@ -1,7 +1,6 @@
 {
   "resolution": 7,
   "model_status": "historical",
-  "model_note": "Historical simulation from the trained AST-GCN forecast archive. Choose a historical date to inspect the modeled diurnal AQI pattern; this is not a live measurement.",
   "anchor_date": "2026-06-28",
   "archive": {
     "start_date": "2024-02-02",
@@ -22,57 +21,33 @@
     8,
     12
   ],
-  "n_horizons": 4,
-  "n_slots": 6,
   "n_cells": 290,
-  "n_forecast_cells": 290,
   "legend": [
     {
       "category": "BAIK",
-      "english": "Good",
       "upper": 50.0,
       "color": "#00B050"
     },
     {
       "category": "SEDANG",
-      "english": "Moderate",
       "upper": 100.0,
       "color": "#0070C0"
     },
     {
       "category": "TIDAK SEHAT",
-      "english": "Unhealthy",
       "upper": 200.0,
       "color": "#FFC000"
     },
     {
       "category": "SANGAT TIDAK SEHAT",
-      "english": "Very Unhealthy",
       "upper": 300.0,
       "color": "#FF0000"
     },
     {
       "category": "BERBAHAYA",
-      "english": "Hazardous",
       "upper": null,
       "color": "#000000"
     }
-  ],
-  "category_legend": {
-    "BAIK": "#00B050",
-    "SEDANG": "#0070C0",
-    "TIDAK SEHAT": "#FFC000",
-    "SANGAT TIDAK SEHAT": "#FF0000",
-    "BERBAHAYA": "#000000",
-    "TIDAK ADA DATA": "#BFBFBF"
-  },
-  "category_order": [
-    "BAIK",
-    "SEDANG",
-    "TIDAK SEHAT",
-    "SANGAT TIDAK SEHAT",
-    "BERBAHAYA",
-    "TIDAK ADA DATA"
   ],
   "no_data_color": "#BFBFBF",
   "disclaimers": [

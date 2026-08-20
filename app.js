@@ -5,7 +5,7 @@
  *   forecast_r{R}.json  - { model_status, anchor_date, slot_hours, horizons_h,
  *                           cells: { h3_id: { slot_h: [ {offset_h, value, category, colour} ] } } }
  *                         (slot_h = a fixed clock slot; historical views use one point per
- *                          slot to show the full diurnal pattern. A legacy flat shape is still accepted.)
+ *                          slot to show the full diurnal pattern.)
  *   hexes_r{R}.geojson  - hex-cell polygons (+ h3_id, center_lat/lon)
  *
  * AQI scale, category and colour all come from meta (exported from aqi_models.physics),
@@ -45,7 +45,6 @@ const state = {
   selectedLayer: null,
   locationMarker: null,
   chart: null,
-  currentSlot: null, // retained for legacy flat data; historical views use all clock slots
   selected: null, // { h3id, lat, lng } of the chosen cell, so the clock tick can re-render it
   mode: "current", // "current" | "other"
   archiveDate: null, // "YYYY-MM-DD" currently shown
@@ -144,12 +143,10 @@ function nearestSlot(hour, slots) {
 // own slot_hours; fall back to meta for generated/default files or legacy data).
 const activeSlotHours = () => (state.forecast && state.forecast.slot_hours) || (state.meta && state.meta.slot_hours) || [];
 
-// The current-slot series for a cell. Accepts the slot-keyed shape
-// { slot_h: [series] } and the legacy flat [series] (returned as-is).
+// The clock-slot series for a cell, from the slot-keyed shape { slot_h: [series] }.
 function diurnalSeriesForCell(h3id) {
   const cell = cellsMap()[h3id];
   if (!cell) return null;
-  if (Array.isArray(cell)) return cell;                       // legacy flat (single anchor)
   const slots = Object.keys(cell).map(Number).sort((a, b) => a - b);
   const points = slots.map((slot) => {
     const series = cell[String(slot)] || [];
@@ -375,24 +372,11 @@ function selectByCell(h3id, lat, lng) {
 // ---------------------------------------------------------------------------
 // Forecast chart + step badges
 // ---------------------------------------------------------------------------
-const stepLabel = (offsetH) => (offsetH === 0 ? "Sekarang" : `+${offsetH}j`);
-
-// WIB clock time of a forecast point. Slots are whole WIB clock hours and offsets
-// are whole hours, so the wall-clock is just (slot + offset) mod 24 -- computed in
-// WIB directly, independent of the viewer's browser timezone.
-function stepClock(offsetH) {
-  if (state.currentSlot != null) return pad2((state.currentSlot + offsetH) % 24) + ":00";
-  // legacy flat data (single anchor): derive the hour from anchor_ts if present.
-  if (state.meta.anchor_ts) {
-    const d = new Date(String(state.meta.anchor_ts).replace(" ", "T"));
-    if (!isNaN(d.getTime())) return pad2((d.getHours() + offsetH) % 24) + ":00";
-  }
-  return "";
-}
-
+// WIB clock time of a forecast point. Slots are whole WIB clock hours, so the
+// wall-clock label is the point's clock_h directly (set per point by
+// diurnalSeriesForCell), independent of the viewer's browser timezone.
 function pointClock(point) {
-  if (point && point.clock_h != null) return pad2(point.clock_h) + ":00";
-  return stepClock(point ? point.offset_h : 0);
+  return point && point.clock_h != null ? pad2(point.clock_h) + ":00" : "";
 }
 
 function renderPeakSummary(peak) {
@@ -405,17 +389,12 @@ function renderPeakSummary(peak) {
 }
 
 function renderChart(series) {
-  // Heading reflects the actual step size + horizon span from the data (not hardcoded).
-  const step = series.length > 1 && series[1].clock_h != null
-    ? (series[1].clock_h - series[0].clock_h + 24) % 24
-    : (series.length > 1 ? series[1].offset_h - series[0].offset_h : 0);
+  // Heading reflects the actual step size from the data (not hardcoded).
+  const step = series.length > 1 ? (series[1].clock_h - series[0].clock_h + 24) % 24 : 0;
   const titleEl = document.getElementById("chart-title");
   if (titleEl) titleEl.textContent = step ? `Pola harian historis · slot ${step} jam` : "Pola historis";
 
-  const labels = series.map((s) => {
-    const clk = pointClock(s);
-    return clk ? clk : stepLabel(s.offset_h);
-  });
+  const labels = series.map((s) => pointClock(s));
   const values = series.map((s) => s.value);
   const colors = series.map((s) => s.colour || colorFor(s.value));
   const ctx = document.getElementById("forecast-chart");
@@ -476,7 +455,7 @@ function renderStepBadges(series) {
     const div = document.createElement("div");
     div.className = "sb";
     div.innerHTML =
-      `<div class="sb-time">${clk ? clk + " WIB" : stepLabel(s.offset_h)}</div>` +
+      `<div class="sb-time">${clk} WIB</div>` +
       `<div class="sb-val">${Math.round(s.value)}</div>` +
       `<div><span class="dot" style="background:${s.colour || e.color}"></span>${s.category || e.category}</div>`;
     wrap.appendChild(div);
@@ -523,8 +502,6 @@ function renderBanner() {
 function renderAbout() {
   document.getElementById("about-disclaimers").innerHTML =
     state.meta.disclaimers.map((d) => `<li>${d}</li>`).join("");
-  const footer = document.getElementById("footer-note");
-  if (footer) footer.textContent = "";
 }
 
 function renderSimulationControls() {
@@ -666,7 +643,6 @@ function resetForecastState() {
   state.forecast = null;
   state.archiveDate = null;
   state.climatology = null;
-  state.currentSlot = null;
 
   if (state.chart) {
     state.chart.destroy();
@@ -691,7 +667,6 @@ function resetForecastState() {
 // Re-derive everything that depends on "which forecast is loaded": the clock slot,
 // the grid colouring, the banner, and the currently-selected cell's readout.
 function refreshAfterForecastChange() {
-  state.currentSlot = null;
   if (state.geoLayer) state.geoLayer.setStyle(styleForFeature);
   renderSimulationControls();
   renderBanner();
@@ -1006,7 +981,6 @@ async function boot() {
 
   const geojson = await fetch(`data/hexes_r${meta.resolution}.geojson`).then((r) => r.json());
   state.forecast = null;
-  state.currentSlot = null;
   const resLabel = document.getElementById("res-label");
   if (resLabel) resLabel.textContent = "r" + meta.resolution;
 

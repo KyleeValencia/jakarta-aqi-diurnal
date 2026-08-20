@@ -32,7 +32,6 @@ unset -> /kaggle fallback).
 Reuses (does NOT reinvent):
   * aqi_models.physics  -> ISPU index -> category + official KLHK colour
   * aqi_utils.paths     -> WORKING_ROOT, upstream_dir(), hex_grid_name()
-  * aqi_utils.constants -> category order
 """
 
 from __future__ import annotations
@@ -55,7 +54,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "jakarta-aqi-utils-fix"))
 
 import geopandas as gpd  # noqa: E402
 
-from aqi_utils import constants, paths  # noqa: E402
+from aqi_utils import paths  # noqa: E402
 from aqi_models.physics import (  # noqa: E402
     ISPU_CATEGORY_COLOR,
     ISPU_INDEX_CATEGORY,
@@ -75,16 +74,6 @@ DEFAULT_HORIZONS_H = ModelConfig().forecast_offsets()
 # Default clock slots (pending mode); historical mode uses NB8's meta.slot_hours. Every fixed
 # slot spaced forecast_n h apart (D-12 default 4 -> [0,4,8,12,16,20]).
 DEFAULT_SLOT_HOURS = ModelConfig().anchor_hours
-
-# English glosses for the Indonesian category labels (display only).
-CATEGORY_ENGLISH = {
-    "BAIK": "Good",
-    "SEDANG": "Moderate",
-    "TIDAK SEHAT": "Unhealthy",
-    "SANGAT TIDAK SEHAT": "Very Unhealthy",
-    "BERBAHAYA": "Hazardous",
-    "TIDAK ADA DATA": "No data",
-}
 
 DISCLAIMERS = [
     "Nilai yang ditampilkan adalah simulasi model untuk tanggal historis yang dipilih, bukan "
@@ -107,17 +96,6 @@ ARCHIVE_CONFIG = {
     "end_date": "2025-02-28",
     "path_pattern": "data/forecast_r{res}_{date}.json",
 }
-
-PENDING_NOTE = (
-    "Model output is being re-trained (pm25_conc target). Simulation values are not yet "
-    "published - the map and location tools work, but per-cell values show "
-    "'awaiting model output'."
-)
-LIVE_NOTE = (
-    "Historical simulation from the trained AST-GCN output archive. Choose a historical date to "
-    "inspect the modeled diurnal AQI pattern; this is not a live measurement."
-)
-
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -147,7 +125,6 @@ def build_legend() -> list[dict]:
         legend.append(
             {
                 "category": cat,
-                "english": CATEGORY_ENGLISH.get(cat, cat.title()),
                 "upper": None if math.isinf(upper) else upper,
                 "color": ISPU_CATEGORY_COLOR[cat],
             }
@@ -274,12 +251,10 @@ def main() -> None:
         horizons = horizons or DEFAULT_HORIZONS_H
         slot_hours = slot_hours or DEFAULT_SLOT_HOURS
         model_status = "historical"
-        model_note = LIVE_NOTE
     else:
         cells, anchor = {}, None
         horizons, slot_hours = DEFAULT_HORIZONS_H, DEFAULT_SLOT_HOURS
         model_status = "pending_retrain"
-        model_note = PENDING_NOTE
 
     # --- Per-cell forecast (frontend contract: slot-keyed diurnal series) ---
     forecast = {
@@ -298,18 +273,12 @@ def main() -> None:
     meta = {
         "resolution": res,
         "model_status": model_status,
-        "model_note": model_note,
         "anchor_date": anchor,
         "archive": ARCHIVE_CONFIG,
         "slot_hours": slot_hours,
         "horizons_h": horizons,
-        "n_horizons": len(horizons),
-        "n_slots": len(slot_hours),
         "n_cells": n_geo,
-        "n_forecast_cells": len(cells),
         "legend": build_legend(),
-        "category_legend": {cat: ISPU_CATEGORY_COLOR[cat] for cat in constants.ISPU_CATEGORY_ORDER},
-        "category_order": constants.ISPU_CATEGORY_ORDER,
         "no_data_color": ISPU_CATEGORY_COLOR["TIDAK ADA DATA"],
         "disclaimers": DISCLAIMERS,
     }
