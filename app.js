@@ -8,8 +8,10 @@
  *                          slot to show the full diurnal pattern.)
  *   hexes_r{R}.geojson  - hex-cell polygons (+ h3_id, center_lat/lon)
  *
- * AQI scale, category and colour all come from meta (exported from aqi_models.physics),
- * so nothing about the scale is hardcoded here.
+ * AQI category and colour come from meta (exported from aqi_models.physics).
+ * One scale table IS mirrored below: PM25_BREAKPOINTS (copied verbatim from
+ * aqi_models/physics.py) to invert archive ISPU values back to ug/m3 --
+ * meta.json carries no concentration table.
  *
  * Historical-first flow:
  *   The page starts with map + location tools only. Forecast values are loaded
@@ -45,6 +47,9 @@ const state = {
   selectedLayer: null,
   locationMarker: null,
   chart: null,
+  monthly: null, // data/monthly_r7.json (13-month per-cell aggregate), or null if absent
+  gazetteer: null, // data/gazetteer_dki.json entries [label, lat, lon], or null if absent
+  monthlyChart: null,
   selected: null, // { h3id, lat, lng } of the chosen cell, so the clock tick can re-render it
   mode: "current", // "current" | "other"
   archiveDate: null, // "YYYY-MM-DD" currently shown
@@ -68,7 +73,7 @@ const isPending = () => !state.meta || !state.forecast || state.meta.model_statu
 const cellsMap = () => (state.forecast && state.forecast.cells) || {};
 const show = (id, on) => document.getElementById(id).classList.toggle("hidden", !on);
 const DATE_GATED_BUTTON_IDS = [
-  "mode-current", "mode-other", "locate-btn", "go-btn",
+  "mode-current", "mode-other", "locate-btn", "go-btn", "search-input",
   "sim-raw", "sim-blend", "blur-toggle",
 ];
 const DATE_GATED_CARD_IDS = [
@@ -102,6 +107,35 @@ function legendEntryFor(value) {
 }
 const colorFor = (value) => legendEntryFor(value).color;
 const round1 = (value) => Math.round(Number(value) * 10) / 10;
+
+// PM2.5 breakpoints (conc_low, conc_high, index_low, index_high), copied
+// verbatim from aqi_models/physics.py PM25_BREAKPOINTS (Permen LHK 14/2020,
+// shared-edge 15.5 -> 50 basis -- the SAME table that wrote the archive's
+// ISPU values via physics.pm25_to_ispu; do NOT swap in a 15.6 -> 51 table).
+const PM25_BREAKPOINTS = [
+  [0.0, 15.5, 0.0, 50.0],
+  [15.5, 55.4, 50.0, 100.0],
+  [55.4, 150.4, 100.0, 200.0],
+  [150.4, 250.4, 200.0, 300.0],
+  [250.4, 500.0, 300.0, 500.0],
+];
+
+// Invert an ISPU index back to a PM2.5 concentration (ug/m3) -- JS port of
+// physics.ispu_to_pm25. Archive values are 1-decimal ISPU, so the round-trip
+// error is at most ~0.06 ug/m3; values are simulated, hence the '\u2248' label.
+function ispuToPm25(index) {
+  const v = Number(index);
+  if (!Number.isFinite(v) || v < 0) return null;
+  for (const [xLo, xHi, iLo, iHi] of PM25_BREAKPOINTS) {
+    if (v <= iHi) return ((xHi - xLo) / (iHi - iLo)) * (v - iLo) + xLo;
+  }
+  return PM25_BREAKPOINTS[PM25_BREAKPOINTS.length - 1][1];
+}
+
+function concLabel(value) {
+  const c = ispuToPm25(value);
+  return c === null ? "" : `\u2248 ${c.toFixed(1)} \u00b5g/m\u00b3`;
+}
 
 function modeInfo(id) {
   const modes = (state.meta && state.meta.simulation_modes) || DEFAULT_SIMULATION_MODES;
@@ -338,6 +372,8 @@ function selectByCell(h3id, lat, lng) {
       ? "Pilih tanggal historis lalu tekan Tampilkan tanggal untuk memuat simulasi sel ini."
       : "Lokasi ini di luar grid wilayah studi daratan Jakarta, jadi tidak punya AQI hasil simulasi.";
     if (state.chart) { state.chart.destroy(); state.chart = null; }
+    if (state.monthlyChart) { state.monthlyChart.destroy(); state.monthlyChart = null; }
+    show("monthly-section", false);
     return;
   }
 
@@ -353,6 +389,8 @@ function selectByCell(h3id, lat, lng) {
     badge.textContent = "Di luar cakupan";
     badge.style.background = state.meta.no_data_color;
     if (state.chart) { state.chart.destroy(); state.chart = null; }
+    if (state.monthlyChart) { state.monthlyChart.destroy(); state.monthlyChart = null; }
+    show("monthly-section", false);
     return;
   }
   show("aqi-readout", true);
@@ -364,9 +402,11 @@ function selectByCell(h3id, lat, lng) {
   const badge = document.getElementById("aqi-badge");
   badge.textContent = `${peak.category || e.category}`;
   badge.style.background = peak.colour || e.color;
+  document.getElementById("aqi-conc").textContent = concLabel(peak.value);
   renderPeakSummary(peak);
   renderChart(series);
   renderStepBadges(series);
+  renderMonthlyChart(h3id);
 }
 
 // ---------------------------------------------------------------------------
@@ -385,7 +425,8 @@ function renderPeakSummary(peak) {
   const clk = pointClock(peak);
   el.innerHTML =
     `<strong>AQI puncak</strong> <span class="peak-time">${clk} WIB</span>` +
-    ` &middot; ${Math.round(peak.value)} &middot; ${peak.category || e.category}`;
+    ` &middot; ${Math.round(peak.value)} &middot; ${peak.category || e.category}` +
+    ` &middot; ${concLabel(peak.value)}`;
 }
 
 function renderChart(series) {
@@ -425,7 +466,10 @@ function renderChart(series) {
           callbacks: {
             label: (item) => {
               const e = legendEntryFor(item.parsed.y);
-              return `AQI ${Math.round(item.parsed.y)} — ${e.category}`;
+              const lines = [`AQI ${Math.round(item.parsed.y)} — ${e.category}`];
+              const conc = concLabel(item.parsed.y);
+              if (conc) lines.push(conc);
+              return lines;
             },
           },
         },
@@ -446,6 +490,79 @@ function renderChart(series) {
   });
 }
 
+function renderMonthlyChart(h3id) {
+  // 13-month archive aggregate for the selected cell (raw mode only -- the
+  // build script does not blend climatology, so say so in the note). Values
+  // are [mean daily-max ISPU, mean daily-max ug/m3] per month; the ug/m3
+  // column comes from per-day inversions at build time (exact), not from
+  // inverting the monthly mean index.
+  const cell = state.monthly && state.monthly.cells && state.monthly.cells[h3id];
+  if (!cell) {
+    if (state.monthlyChart) { state.monthlyChart.destroy(); state.monthlyChart = null; }
+    show("monthly-section", false);
+    return;
+  }
+  show("monthly-section", true);
+  const meta = state.monthly.meta;
+  const labels = meta.months.map((m) => (meta.incomplete[m] ? `${m}*` : m));
+  const ispu = meta.months.map((m) => (cell[m] ? cell[m][0] : null));
+  const conc = meta.months.map((m) => (cell[m] ? cell[m][1] : null));
+  const colors = ispu.map((v) => (v === null ? "#999" : colorFor(v)));
+  const inc = Object.entries(meta.incomplete).map(([m, t]) => `*${m}: ${t}`).join(" \u00b7 ");
+  document.getElementById("monthly-note").textContent =
+    `Rerata ISPU maksimum harian per bulan (${meta.first_date} s.d. ${meta.last_date}), ` +
+    `mode tanpa klimatologi \u2014 hasil simulasi model, bukan pengukuran.` +
+    (inc ? ` ${inc}.` : "");
+  const ctx = document.getElementById("monthly-chart");
+  if (state.monthlyChart) state.monthlyChart.destroy();
+  state.monthlyChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        data: ispu,
+        borderColor: "#8893a0",
+        borderWidth: 2,
+        tension: 0.3,
+        spanGaps: true,
+        pointBackgroundColor: colors,
+        pointBorderColor: "#333",
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { left: 0, right: 4, top: 4, bottom: 0 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const lines = [`Rerata ISPU ${round1(item.parsed.y)} \u2014 ${legendEntryFor(item.parsed.y).category}`];
+              const c = conc[item.dataIndex];
+              if (c !== null) lines.push(`\u2248 ${c.toFixed(1)} \u00b5g/m\u00b3`);
+              return lines;
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          suggestedMax: 150,
+          title: { display: true, text: "ISPU", font: { size: 10 } },
+          ticks: { font: { size: 10 }, padding: 2, maxTicksLimit: 5 },
+        },
+        x: {
+          ticks: { maxRotation: 60, minRotation: 45, autoSkip: false, font: { size: 9 }, padding: 2 },
+        },
+      },
+    },
+  });
+}
+
 function renderStepBadges(series) {
   const wrap = document.getElementById("step-badges");
   wrap.innerHTML = "";
@@ -457,6 +574,7 @@ function renderStepBadges(series) {
     div.innerHTML =
       `<div class="sb-time">${clk} WIB</div>` +
       `<div class="sb-val">${Math.round(s.value)}</div>` +
+      `<div class="sb-conc">${concLabel(s.value)}</div>` +
       `<div><span class="dot" style="background:${s.colour || e.color}"></span>${s.category || e.category}</div>`;
     wrap.appendChild(div);
   });
@@ -479,6 +597,10 @@ function renderLegend() {
     ul.appendChild(li);
     lower = (e.upper ?? lower) + 1;
   });
+  // Symbol legend: only the no-data swatch needs a runtime colour --
+  // meta.no_data_color is the single source of truth (also used by the map).
+  const nd = document.getElementById("sym-nodata");
+  if (nd) nd.style.background = state.meta.no_data_color;
 }
 
 function renderBanner() {
@@ -648,6 +770,11 @@ function resetForecastState() {
     state.chart.destroy();
     state.chart = null;
   }
+  if (state.monthlyChart) {
+    state.monthlyChart.destroy();
+    state.monthlyChart = null;
+  }
+  show("monthly-section", false);
 
   show("result-card", false);
   show("aqi-readout", false);
@@ -904,6 +1031,14 @@ function wireControls() {
     );
   });
 
+  document.getElementById("search-input").addEventListener("change", (e) => {
+    if (!state.gazetteer) return;
+    const q = e.target.value.trim();
+    const hit = state.gazetteer.find((g) => g[0] === q);
+    if (!hit) return; // free text that matches no suggestion: do nothing
+    state.map.setView([hit[1], hit[2]], Math.max(state.map.getZoom(), 12));
+    selectByLatLng(hit[1], hit[2]);
+  });
   document.getElementById("go-btn").addEventListener("click", () => {
     const lat = parseFloat(document.getElementById("lat-input").value);
     const lng = parseFloat(document.getElementById("lon-input").value);
@@ -980,6 +1115,25 @@ async function boot() {
   state.simulationMode = meta.default_simulation_mode || "raw";
 
   const geojson = await fetch(`data/hexes_r${meta.resolution}.geojson`).then((r) => r.json());
+  state.monthly = await fetch("data/monthly_r7.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+  const gaz = await fetch("data/gazetteer_dki.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+  if (gaz && Array.isArray(gaz.entries)) {
+    state.gazetteer = gaz.entries; // [label, lat, lon], labels unique (build_gazetteer.py)
+    const dl = document.getElementById("gazetteer-list");
+    const frag = document.createDocumentFragment();
+    for (const [label] of gaz.entries) {
+      const opt = document.createElement("option");
+      opt.value = label;
+      frag.appendChild(opt);
+    }
+    dl.appendChild(frag);
+  } else {
+    show("search-input", false); // no gazetteer file -> hide the search box
+  }
   state.forecast = null;
   const resLabel = document.getElementById("res-label");
   if (resLabel) resLabel.textContent = "r" + meta.resolution;

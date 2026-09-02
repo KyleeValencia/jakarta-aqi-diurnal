@@ -1,108 +1,98 @@
-# Deploying the Jakarta AQI site to GitHub Pages
+# Deploying the Jakarta AQI site to Vercel
 
-The site in this `web/` folder is **fully static** (HTML/CSS/JS + JSON data), so GitHub
-Pages can serve it for free with no backend.
+The live site is <https://simulation-aqi-jakarta-diurnal.vercel.app>. Vercel watches the
+`jakarta-aqi-diurnal` repo and rebuilds on every push to `main`, so "deploying" here means:
+mirror this folder into that repo's clone, then push.
 
-> ⚠️ **Push ONLY this `web/` folder — never the whole project root.**
-> The project root contains the Kaggle data mirror and a flagged Copernicus API key
-> (see `docs/PROJECT_STATUS.md` §6). Initialising git at the root would risk publishing
-> data and secrets. The steps below `cd` into `web/` and make *that* the repo, so the
-> public repository contains only the website.
+> ⚠️ **Publish ONLY this `web/` folder. Never the whole project root.**
+> The project root holds the Kaggle data mirror and a flagged Copernicus API key
+> (see `docs/PROJECT_STATUS.md` §6). The deploy script below mirrors *this folder only*,
+> which is what keeps the public repository free of data and secrets. Do not point it at a
+> parent directory.
 
 ---
 
-## 0. Prerequisites
+## 0. The three places involved
 
-- **git** — installed (`git version 2.54`).
-- **A GitHub account.**
-- `gh` (GitHub CLI) is **not** installed here, so the steps use plain `git` + the GitHub
-  web UI. (Optional `gh` path is at the bottom.)
+| Path / name | Role |
+|---|---|
+| `Desktop\test web\web` | the folder you edit |
+| `Desktop\jakarta-aqi-diurnal-upload` | clone wired to `origin = jakarta-aqi-diurnal`, a pure staging area |
+| Vercel project `simulation-aqi-jakarta-diurnal` | builds the repo above |
 
-## 1. Build the data (already done for the preview)
+> **Two traps.**
+>
+> This folder's own git remote points at `jakarta-AQI-simulation-sample`, which is **not** the
+> repo Vercel builds. Pushing from here deploys nothing.
+>
+> The older URL `jakarta-aqi-diurnal.vercel.app` is dead (`DEPLOYMENT_NOT_FOUND`). The live one
+> is `simulation-aqi-jakarta-diurnal.vercel.app`.
+
+## 1. Prerequisites
+
+- **git** installed.
+- Push access to the `jakarta-aqi-diurnal` repo.
+- The staging clone already present at `Desktop\jakarta-aqi-diurnal-upload`. The deploy script
+  refuses to run without it.
+
+## 2. Build the data
 
 ```powershell
-# Coming-soon / preview build (current state — no forecast numbers yet):
+# Placeholder build (geometry + meta only, no forecast numbers):
 python web/build_web_data.py --mode pending
 
-# After the pm25_conc re-train + NB8 re-run lands, swap in real forecasts:
-python web/build_web_data.py --mode live
+# The shipped build: real per-cell forecasts read from NB8 output:
+python web/build_web_data.py --mode historical
 ```
 
-Both write to `web/data/` and need no front-end change.
+Both write to `web/data/` and need no front-end change. Resolution defaults to r7
+(`--resolution`).
 
-## 2. Create an empty repo on GitHub
+## 3. Deploy
 
-Go to <https://github.com/new>, name it e.g. **`jakarta-aqi-web`**, set it **Public**
-(Pages is free for public repos), and **do not** add a README/.gitignore/license
-(the folder already has its files). Click *Create repository*.
-
-## 3. Push the `web/` folder
-
-In PowerShell, from the project:
+Run from `Desktop\test web`:
 
 ```powershell
-cd "C:\Users\Lenovo\Documents\AQI research data Kaggle Notebook Jupyter\web"
-git init
-git add .
-git commit -m "Jakarta AQI website (preview)"
-git branch -M main
-git remote add origin https://github.com/<YOUR-USERNAME>/jakarta-aqi-web.git
-git push -u origin main
+# Preview: list what would change, copy nothing.
+powershell -ExecutionPolicy Bypass -File deploy_to_vercel.ps1 -DryRun
+
+# Mirror and stage, but stop before commit + push.
+powershell -ExecutionPolicy Bypass -File deploy_to_vercel.ps1 -PrepOnly
+
+# Full deploy: mirror, commit, push. Vercel redeploys on its own.
+powershell -ExecutionPolicy Bypass -File deploy_to_vercel.ps1
 ```
 
-(Replace `<YOUR-USERNAME>`. On first push, git will prompt you to authenticate to GitHub.)
+What the script does, in order:
 
-## 4. Turn on GitHub Pages
+1. Hard-resets the clone to `origin/main`. The clone is pure staging with no local work to
+   preserve, and the reset guarantees the later push fast-forwards instead of being rejected.
+2. Mirrors this folder in with robocopy `/MIR`, so the repo ends up matching the source exactly,
+   stale files included. Excluded: `.git`, `__pycache__`, `data_climatology`, `*.pyc`,
+   `*.parquet`, and `ADMIN_PARQUET_CONTRACT.md`.
+3. Stages everything and shows the diff.
 
-In the new repo: **Settings → Pages → Build and deployment**
-→ **Source: Deploy from a branch** → **Branch: `main` / `(root)`** → **Save**.
+`-PrepOnly` stops there and prints the two git commands to run yourself, keeping the public
+write a deliberate manual step rather than a side effect of running a script.
 
-After ~1 minute the site is live at:
+## 4. Confirm it landed
 
-```
-https://<YOUR-USERNAME>.github.io/jakarta-aqi-web/
-```
+Open <https://simulation-aqi-jakarta-diurnal.vercel.app> after the push. A static folder this
+size builds in well under a minute.
 
-All asset paths in the site are **relative** (`style.css`, `app.js`, `data/...`), so it
-works correctly under that `/jakarta-aqi-web/` sub-path with no extra config. The
-`.nojekyll` file (already present) tells Pages to serve the files as-is.
-
-> Geolocation ("Locate me") needs HTTPS — GitHub Pages serves HTTPS, so it works in
-> production. Locally it only works on `localhost`.
-
-## 5. Updating the live site later
-
-```powershell
-cd "C:\Users\Lenovo\Documents\AQI research data Kaggle Notebook Jupyter\web"
-python ..\web\build_web_data.py --mode live   # or --mode pending
-git add data
-git commit -m "Update forecast data"
-git push
-```
-
-GitHub Pages redeploys automatically on every push to `main`.
-
----
-
-## Optional: one-liner with the GitHub CLI
-
-If you later install [`gh`](https://cli.github.com/) and run `gh auth login`:
-
-```powershell
-cd "C:\Users\Lenovo\Documents\AQI research data Kaggle Notebook Jupyter\web"
-git init; git add .; git commit -m "Jakarta AQI website (preview)"
-gh repo create jakarta-aqi-web --public --source=. --push
-```
-
-Then enable Pages as in step 4 (or `gh` will offer it).
+> Geolocation ("Lokasi saya") needs HTTPS. Vercel serves HTTPS, so it works in production.
+> Locally it only works on `localhost`.
 
 ---
 
 ## Notes
 
-- **Custom domain:** add it under Settings → Pages → Custom domain, and create a
-  `CNAME` file in this folder.
-- **Tiles & libraries** (Leaflet, Chart.js, h3-js, OpenStreetMap tiles) load from public
-  CDNs at runtime, so the page needs internet access — fine on GitHub Pages.
-- This deploys the **static demonstrator**. Serving a *live, on-demand* model is a
-  separate, possibly-paid stage (a Python backend host) — see `docs/PROJECT_STATUS.md` §10.
+- **Custom domain:** add it in the Vercel dashboard under the project's Domains tab. Do not put
+  a `CNAME` file in this folder. That is a GitHub Pages mechanism and does nothing on Vercel.
+- **What needs internet:** Bootstrap, Leaflet, Chart.js and h3-js are vendored under `vendor/`,
+  so no CDN is involved in loading the app. The OpenStreetMap basemap tiles are still fetched
+  over the network, so the map needs a connection even though the application code does not.
+- **Asset paths are relative** (`style.css`, `app.js`, `data/...`), so the site works from a
+  domain root or a sub-path without extra configuration.
+- This deploys the **static demonstrator**. Serving a live, on-demand model is a separate and
+  possibly paid stage, since it needs a Python backend host. See `docs/PROJECT_STATUS.md` §10.

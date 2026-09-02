@@ -10,3 +10,12 @@ These files are local runtime copies sourced from the corresponding official npm
 | h3-js | 4.1.0 | `h3-js-4.1.0/h3-js.umd.js` | Apache-2.0; see `h3-js-4.1.0/LICENSE` and `h3-js-4.1.0/NOTICE` |
 
 Each directory also retains the package's `package.json` as machine-readable version and provenance metadata. The packages were acquired with `npm pack <package>@<version>`.
+
+## OpenStreetMap data
+
+- `data/gazetteer_dki.json` is derived from OpenStreetMap administrative
+  boundaries (admin_level 6–7, DKI Jakarta) fetched once via the Overpass API
+  at build time (`build_gazetteer.py`) — © OpenStreetMap contributors,
+  ODbL 1.0, https://www.openstreetmap.org/copyright
+- Basemap tiles are fetched at runtime from tile.openstreetmap.org;
+  attribution is shown on the map itself.

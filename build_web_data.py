@@ -30,7 +30,11 @@ all reads through aqi_utils.paths, so it runs unchanged on Kaggle (env vars
 unset -> /kaggle fallback).
 
 Reuses (does NOT reinvent):
-  * aqi_models.physics  -> ISPU index -> category + official KLHK colour
+  * aqi_models.physics  -> ISPU index -> category + colour. The category
+                          names follow Permen LHK P.14/2020. The hex values
+                          are this project's design choice, as the
+                          regulation names the colours without specifying
+                          numeric values.
   * aqi_utils.paths     -> WORKING_ROOT, upstream_dir(), hex_grid_name()
 """
 

@@ -132,6 +132,11 @@
         </div>
 
         <div id="panel-other" class="mode-panel hidden">
+          <input id="search-input" class="form-control form-control-sm" type="search"
+                 list="gazetteer-list" autocomplete="off"
+                 placeholder="Cari kelurahan / kecamatan / sensor…" />
+          <datalist id="gazetteer-list"></datalist>
+          <p class="hint">Pilih nama dari daftar saran, atau isi lat/lon di bawah.</p>
           <div class="row g-2 latlon-row">
             <label class="col form-label">Lat <input id="lat-input" class="form-control form-control-sm" type="number" step="0.0001" value="-6.1751" /></label>
             <label class="col form-label">Lon <input id="lon-input" class="form-control form-control-sm" type="number" step="0.0001" value="106.8650" /></label>
@@ -157,12 +162,7 @@
         <div class="mode-row">
           <button id="blur-toggle" class="btn btn-outline-primary mode-btn" type="button" aria-pressed="false">Tandai tingkat dukungan data</button>
         </div>
-        <p id="blur-note" class="hint">Saat tombol aktif, Map akan dibagi menjadi 3 Tingkatan.<br><br>
-          <strong>5 Sel</strong> yang memiliki stasiun ditampilkan dengan garis tebal yang menandai satu-satunya sel yang mempunyai pengukuran asli.<br><br>
-          <strong>175 Sel</strong> lainnya berada dalam AOA tetap berwarna dengan garis lurus biasa.<br><br>
-          <strong>110 Sel</strong> sisa tidak memiliki warna kategori dan berwarna abu-abu dengan garis putus-putus. Hal ini karena area tersebut tidak memiliki variasi fitur spasial yang mirip dengan data 5 sel stasiun dan model lebih mengandalkan fitur yang dihasilkan data satelit.<br><br>
-          Secara sederhana, berwarna berarti ada dukungan data ground, sedangkan yang abu tidak.<br><br>
-          Kedekatan jarak tidak menjadi penentu. Hal ini terbukti ada 149 sel yang berjarak lebih dari 3 km dari stasiun tetap berada dalam AOA.</p>
+        <p id="blur-note" class="hint">Saat tombol aktif, peta dibagi menjadi tiga tingkat dukungan data sesuai legenda “Simbol peta” di bawah — secara sederhana, berwarna berarti ada dukungan data ground, sedangkan yang abu tidak. Kedekatan jarak bukan penentunya: ada 149 sel berjarak lebih dari 3 km dari stasiun yang tetap berada dalam AOA.</p>
       </section>
 
       <!-- 2 - result -->
@@ -174,6 +174,8 @@
         <div id="aqi-readout" class="hidden">
           <div id="aqi-value">&mdash;</div>
           <div id="aqi-badge" class="badge">&mdash;</div>
+          <div id="aqi-conc" class="conc-hint"></div>
+          <p class="conc-note">Konsentrasi µg/m³ adalah hasil inversi dari nilai ISPU simulasi, bukan pengukuran.</p>
         </div>
         <div id="peak-summary" class="peak-summary hidden"></div>
 
@@ -191,12 +193,29 @@
           </div>
           <div id="step-badges" class="step-badges"></div>
         </div>
+
+        <!-- monthly aggregate over the whole archive (independent of the chosen date) -->
+        <div id="monthly-section" class="hidden">
+          <h3 class="chart-title">Rerata bulanan sel ini</h3>
+          <div class="chart-panel" aria-label="Grafik AQI bulanan">
+            <canvas id="monthly-chart" height="150"></canvas>
+          </div>
+          <p id="monthly-note" class="hint"></p>
+        </div>
       </section>
 
       <!-- 3 - legend -->
       <section class="card app-card shadow-sm" id="legend-card">
         <h2>Skala kualitas udara (ISPU)</h2>
         <ul id="legend-list" class="legend"></ul>
+        <h3 class="legend-subhead">Simbol peta</h3>
+        <ul id="symbol-legend" class="legend">
+          <li><span class="swatch sym-station"></span><span class="legend-label"><span class="legend-id">Garis hitam tebal</span>5 sel berisi stasiun SPKU — satu-satunya sel dengan pengukuran asli</span></li>
+          <li><span class="swatch sym-aoa"></span><span class="legend-label"><span class="legend-id">Garis biasa + warna kategori</span>175 sel di dalam area penerapan (AOA)</span></li>
+          <li><span class="swatch sym-extrap"></span><span class="legend-label"><span class="legend-id">Kelabu putus-putus</span>110 sel di luar AOA — ekstrapolasi, warna kategori dilepas</span></li>
+          <li><span class="swatch sym-nodata" id="sym-nodata"></span><span class="legend-label"><span class="legend-id">Kelabu polos</span>tanpa data / di luar cakupan grid</span></li>
+        </ul>
+        <p class="hint symbol-note">Garis stasiun dan putus-putus paling jelas saat tombol “Tandai tingkat dukungan data” aktif.</p>
       </section>
     </aside>
   </main>
