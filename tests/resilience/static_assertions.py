@@ -71,6 +71,9 @@ class WebResilienceStaticTests(unittest.TestCase):
         self.assertLess(html.index('id="legend-card"'), html.index('id="symbol-legend"'))
         app = (ROOT / "app.js").read_text(encoding="utf-8")
         self.assertIn('getElementById("sym-nodata")', app)
+        # the clicked-cell outline must stay distinct from the station outline
+        self.assertIn('sym-selected', html)
+        self.assertIn('color: "#7c3aed", weight: 3.5', app)
 
     def test_monthly_aggregate_artifact_and_panel(self):
         import json

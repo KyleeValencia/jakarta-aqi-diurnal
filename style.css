@@ -590,6 +590,7 @@ button.primary:hover { filter: brightness(1.05); }
 .legend .legend-label { min-width: 0; overflow-wrap: anywhere; }
 /* map-symbol swatches: values mirror styleForFeature() in app.js */
 .legend-subhead { font-size: 13px; margin: 12px 0 0; }
+.legend .sym-selected { background: rgba(0,112,192,.55); border: 3px solid #7c3aed; }
 .legend .sym-station { background: rgba(0,112,192,.8); border: 2px solid #111; }
 .legend .sym-aoa { background: rgba(0,112,192,.55); border: 1px solid #7d8794; }
 .legend .sym-extrap { background: rgba(170,178,187,.5); border: 1px dashed #6b7480; }

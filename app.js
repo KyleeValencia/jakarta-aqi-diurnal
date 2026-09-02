@@ -333,7 +333,8 @@ function placeMarker(lat, lng) {
 function highlight(layer) {
   if (state.selectedLayer && state.geoLayer) state.geoLayer.resetStyle(state.selectedLayer);
   if (layer) {
-    layer.setStyle({ color: "#111", weight: 2.5, fillOpacity: isPending() ? 0.4 : 0.65 });
+    // ungu tebal, sengaja beda dari garis hitam sel stasiun (#111) dan dash abu luar-AOA
+    layer.setStyle({ color: "#7c3aed", weight: 3.5, fillOpacity: isPending() ? 0.4 : 0.65 });
     layer.bringToFront();
   }
   state.selectedLayer = layer;
