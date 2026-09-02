@@ -130,7 +130,7 @@ def main() -> None:
         {
             "id": "raw",
             "label": "Tanpa klimatologi",
-            "description": "Murni hasil model prediksi",
+            "description": "Murni hasil prediksi model.",
         },
         {
             "id": "blend_climatology",

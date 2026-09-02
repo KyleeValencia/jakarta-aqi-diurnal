@@ -91,7 +91,7 @@ function hasLoadedSelectedDate() {
 }
 
 const DEFAULT_SIMULATION_MODES = [
-  { id: "raw", label: "Tanpa klimatologi", description: "Murni hasil model prediksi" },
+  { id: "raw", label: "Tanpa klimatologi", description: "Murni hasil prediksi model." },
   { id: "blend_climatology", label: "Dengan klimatologi", description: "50% hasil model + 50% klimatologi ISPU." },
 ];
 
@@ -467,7 +467,7 @@ function renderChart(series) {
           callbacks: {
             label: (item) => {
               const e = legendEntryFor(item.parsed.y);
-              const lines = [`AQI ${Math.round(item.parsed.y)} — ${e.category}`];
+              const lines = [`AQI ${Math.round(item.parsed.y)} \u00b7 ${e.category}`];
               const conc = concLabel(item.parsed.y);
               if (conc) lines.push(conc);
               return lines;
@@ -512,7 +512,7 @@ function renderMonthlyChart(h3id) {
   const inc = Object.entries(meta.incomplete).map(([m, t]) => `*${m}: ${t}`).join(" \u00b7 ");
   document.getElementById("monthly-note").textContent =
     `Rerata ISPU maksimum harian per bulan (${meta.first_date} s.d. ${meta.last_date}), ` +
-    `mode tanpa klimatologi \u2014 hasil simulasi model, bukan pengukuran.` +
+    `mode tanpa klimatologi. Hasil simulasi model, bukan pengukuran.` +
     (inc ? ` ${inc}.` : "");
   const ctx = document.getElementById("monthly-chart");
   if (state.monthlyChart) state.monthlyChart.destroy();
@@ -541,7 +541,7 @@ function renderMonthlyChart(h3id) {
         tooltip: {
           callbacks: {
             label: (item) => {
-              const lines = [`Rerata ISPU ${round1(item.parsed.y)} \u2014 ${legendEntryFor(item.parsed.y).category}`];
+              const lines = [`Rerata ISPU ${round1(item.parsed.y)} \u00b7 ${legendEntryFor(item.parsed.y).category}`];
               const c = conc[item.dataIndex];
               if (c !== null) lines.push(`\u2248 ${c.toFixed(1)} \u00b5g/m\u00b3`);
               return lines;
@@ -820,7 +820,7 @@ async function onArchiveDateChange(dateStr) {
     if (!data) {
       resetForecastState();
       syncHistoricalDateGate();
-      hint.textContent = `Tidak ada simulasi untuk ${dateStr}. Coba tanggal terdekat lainnya`;
+      hint.textContent = `Tidak ada simulasi untuk ${dateStr}. Coba tanggal lain di sekitarnya.`;
       hint.classList.add("warn");
       return false;
     }
@@ -1016,7 +1016,7 @@ function wireControls() {
           setLocateHint("Menampilkan sel hex di lokasi kamu.", false);
         } else {
           if (state.geoLayer) state.map.fitBounds(state.geoLayer.getBounds());
-          setLocateHint("Lokasi kamu di luar grid wilayah studi Jakarta. Yang ditampilkan area yang tercakup.", true);
+          setLocateHint("Lokasi kamu di luar grid wilayah studi Jakarta. Peta hanya menampilkan area yang tercakup.", true);
         }
       },
       (err) => {

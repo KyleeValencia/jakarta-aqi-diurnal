@@ -21,10 +21,10 @@
       <div class="landing-content">
         <div class="landing-copy">
           <p class="landing-kicker">Simulator AQI historis H3 r7</p>
-          <h2 id="landing-title">Jelajahi pola kualitas udara Jakarta hasil estimasi dari model</h2>
+          <h2 id="landing-title">Jelajahi pola kualitas udara Jakarta hasil estimasi model</h2>
           <p class="landing-lede">
-            Telusuri arsip AST-GCN yang sudah dilatih berdasarkan tanggal, lalu cocokkan lokasi
-            mana pun di Jakarta ke sel hex daratan DKI dan pola ISPU hariannya.
+            Pilih tanggal pada arsip keluaran model AST-GCN, lalu cocokkan lokasi mana pun
+            di Jakarta ke sel hex-nya untuk melihat pola ISPU harian.
           </p>
           <div class="landing-actions">
             <button id="landing-start" class="btn btn-primary landing-primary" type="button">Mulai simulasi</button>
@@ -35,7 +35,7 @@
 
         <div class="landing-panel" aria-label="Ringkasan simulasi">
           <div class="landing-panel-head">
-            <span class="landing-panel-label">Riset dasboard</span>
+            <span class="landing-panel-label">Dasbor riset</span>
             <strong>Grid daratan Jakarta</strong>
           </div>
           <div class="metric-grid">
@@ -68,7 +68,7 @@
             </span>
             <span>
               <strong>Puncak + kurva</strong>
-              <em>Tampilkan puncak harian dan pola hariannya.</em>
+              <em>Lihat puncak harian beserta kurvanya.</em>
             </span>
           </div>
           <div class="landing-quick" aria-label="Tanggal mulai cepat">
@@ -76,11 +76,11 @@
             <div class="landing-quick-grid">
               <button id="landing-first-date" class="btn btn-light btn-sm" type="button">
                 <strong>Tanggal pertama</strong>
-                <span>Buka simulasi tersimpan paling awal.</span>
+                <span>Langsung ke hari paling awal di arsip.</span>
               </button>
               <button id="landing-latest-date" class="btn btn-light btn-sm" type="button">
                 <strong>Tanggal terakhir</strong>
-                <span>Buka simulasi tersimpan paling baru.</span>
+                <span>Langsung ke hari paling baru di arsip.</span>
               </button>
               <button id="landing-manual-date" class="btn btn-primary btn-sm" type="button">
                 <strong>Pilih manual</strong>
@@ -162,7 +162,7 @@
         <div class="mode-row">
           <button id="blur-toggle" class="btn btn-outline-primary mode-btn" type="button" aria-pressed="false">Tandai tingkat dukungan data</button>
         </div>
-        <p id="blur-note" class="hint">Saat tombol aktif, peta dibagi menjadi tiga tingkat dukungan data sesuai legenda “Simbol peta” di bawah — secara sederhana, berwarna berarti ada dukungan data ground, sedangkan yang abu tidak. Kedekatan jarak bukan penentunya: ada 149 sel berjarak lebih dari 3 km dari stasiun yang tetap berada dalam AOA.</p>
+        <p id="blur-note" class="hint">Saat tombol aktif, peta dibagi menjadi tiga tingkat dukungan data sesuai legenda “Simbol peta” di bawah. Gampangnya, sel berwarna punya dukungan data ground, sel abu-abu tidak. Kedekatan jarak bukan penentunya: ada 149 sel berjarak lebih dari 3 km dari stasiun yang tetap berada dalam AOA.</p>
       </section>
 
       <!-- 2 - result -->
@@ -210,10 +210,10 @@
         <ul id="legend-list" class="legend"></ul>
         <h3 class="legend-subhead">Simbol peta</h3>
         <ul id="symbol-legend" class="legend">
-          <li><span class="swatch sym-selected"></span><span class="legend-label"><span class="legend-id">Garis ungu tebal</span>sel terpilih — lokasi yang sedang diklik</span></li>
-          <li><span class="swatch sym-station"></span><span class="legend-label"><span class="legend-id">Garis hitam tebal</span>5 sel berisi stasiun SPKU — satu-satunya sel dengan pengukuran asli</span></li>
+          <li><span class="swatch sym-selected"></span><span class="legend-label"><span class="legend-id">Garis ungu tebal</span>sel yang sedang kamu klik</span></li>
+          <li><span class="swatch sym-station"></span><span class="legend-label"><span class="legend-id">Garis hitam tebal</span>5 sel berisi stasiun SPKU, satu-satunya yang punya pengukuran asli</span></li>
           <li><span class="swatch sym-aoa"></span><span class="legend-label"><span class="legend-id">Garis biasa + warna kategori</span>175 sel di dalam area penerapan (AOA)</span></li>
-          <li><span class="swatch sym-extrap"></span><span class="legend-label"><span class="legend-id">Kelabu putus-putus</span>110 sel di luar AOA — ekstrapolasi, warna kategori dilepas</span></li>
+          <li><span class="swatch sym-extrap"></span><span class="legend-label"><span class="legend-id">Kelabu putus-putus</span>110 sel di luar AOA (ekstrapolasi), warna kategorinya dilepas</span></li>
           <li><span class="swatch sym-nodata" id="sym-nodata"></span><span class="legend-label"><span class="legend-id">Kelabu polos</span>tanpa data / di luar cakupan grid</span></li>
         </ul>
         <p class="hint symbol-note">Garis stasiun dan putus-putus paling jelas saat tombol “Tandai tingkat dukungan data” aktif.</p>
@@ -225,7 +225,7 @@
   <div id="about-overlay" class="overlay hidden">
     <div class="overlay-card">
       <button id="about-close" class="overlay-close" type="button" aria-label="Tutup">&times;</button>
-      <h2>Tentang dasboard ini</h2>
+      <h2>Tentang dasbor ini</h2>
       <p>
         Simulasi riset kualitas udara Jakarta untuk <strong>satu hari penuh</strong>, dihitung pada
         grid heksagon <a href="https://h3geo.org/" target="_blank" rel="noopener">H3</a>
@@ -237,8 +237,8 @@
       <h3>Batasan penting</h3>
       <ul id="about-disclaimers" class="about-list"></ul>
       <p class="about-foot">
-        Dibangun dari keluaran simulasi historis statis milik proyek ini, tanpa server model yang
-        berjalan langsung. Peta dasar &copy; kontributor OpenStreetMap.
+        Seluruh isi diambil dari berkas simulasi historis yang statis. Tidak ada server model
+        yang berjalan. Peta dasar &copy; kontributor OpenStreetMap.
       </p>
     </div>
   </div>
